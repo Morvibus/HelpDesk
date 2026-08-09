@@ -1,27 +1,38 @@
-# HelpDesk SESCO - Sistema de Gestión de Requerimientos
+# 🚀 HelpDesk SESCO
 
-Plataforma web multi-departamento desarrollada bajo una arquitectura **Maestro-Detalle** para optimizar la trazabilidad, gestión y resolución de requerimientos internos y de clientes.
-
-## 🚀 Tecnologías Utilizadas
-
-* **Frontend:** React (Vite), Tailwind CSS, Lucide Icons, Axios.
-* **Backend:** FastAPI (Python), Pydantic, SQLAlchemy, JWT (JSON Web Tokens).
-* **Base de Datos:** PostgreSQL.
-* **Infraestructura & Despliegue:** Contenedores Docker y Docker Compose sobre servidores **Rocky Linux**.
+**Sistema Integral de Gestión de Requerimientos**  
+*Plataforma de soporte técnico multi-departamental diseñada para la eficiencia operativa.*
 
 ---
 
-## 👥 Roles del Sistema
+## 📋 Descripción del Proyecto
+SESCO (Sistema de Gestión de Requerimientos) es una solución robusta desarrollada para optimizar la trazabilidad y resolución de incidentes dentro de una organización. Permite la comunicación fluida entre clientes y equipos técnicos, con una capa administrativa para el control de métricas y gestión de personal.
 
-1. **Cliente:** Creación de tickets propios, seguimiento en tablero Kanban, chat en tiempo real y carga de archivos adjuntos.
-2. **Técnico:** Gestión de requerimientos por departamento, autoasignación mediante el botón "Tomar Ticket", resolución de casos y redacción de notas internas privadas.
-3. **Administrador:** Visibilidad global de todos los tickets del sistema, administración completa de catálogos (departamentos y usuarios) y acceso al panel ejecutivo de métricas y reportes.
+## 🛠️ Stack Tecnológico
 
----
+| Capa | Tecnología |
+| :--- | :--- |
+| **Frontend** | React (Vite), Tailwind CSS, Lucide Icons |
+| **Backend** | FastAPI (Python), SQLAlchemy, Pydantic |
+| **Base de Datos** | PostgreSQL |
+| **Infraestructura** | Docker, Docker Compose, Rocky Linux |
 
-## ⚙️ Despliegue en Producción (Rocky Linux & Docker)
+## 👥 Roles y Funcionalidades
 
-1. **Clonar el repositorio:**
-   ```bash
-   git clone [https://github.com/tu-usuario/nombre-repositorio.git](https://github.com/tu-usuario/nombre-repositorio.git)
-   cd nombre-repositorio
+- **👨‍💻 Cliente:** Apertura de tickets, seguimiento en tablero Kanban, chat interactivo y adjuntos multimedia.
+- **🛠️ Técnico:** Gestión departamental, autoasignación de casos ("Tomar Ticket"), resolución y uso de notas privadas internas.
+- **👑 Administrador:** Visibilidad global, gestión de catálogos (usuarios/departamentos) y dashboard ejecutivo de métricas.
+
+## 📊 Arquitectura y Flujo de Trabajo
+El sistema utiliza una arquitectura basada en **JWT (JSON Web Tokens)** para la seguridad de sesiones, con un modelo de datos relacional que asegura la integridad de los requerimientos desde su creación hasta su cierre.
+
+## 🚀 Despliegue en Producción
+Para desplegar el entorno en **Rocky Linux** utilizando Docker:
+
+```bash
+# 1. Clonar el repositorio
+git clone [https://github.com/Morvibus/HelpDesk.git](https://github.com/Morvibus/HelpDesk.git)
+cd HelpDesk
+
+# 2. Levantar los servicios
+docker compose up -d --build
