@@ -6,7 +6,7 @@
 ---
 
 ## 📋 Descripción del Proyecto
-SESCO (Sistema de Gestión de Requerimientos) es una solución robusta desarrollada para optimizar la trazabilidad y resolución de incidentes dentro de una organización. Permite la comunicación fluida entre clientes y equipos técnicos, con una capa administrativa para el control de métricas y gestión de personal.
+(Sistema de Gestión de Requerimientos) es una solución robusta desarrollada para optimizar la trazabilidad y resolución de incidentes dentro de una organización. Permite la comunicación fluida entre clientes y equipos técnicos, con una capa administrativa para el control de métricas y gestión de personal.
 
 ## 🛠️ Stack Tecnológico
 
