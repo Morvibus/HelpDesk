@@ -1,0 +1,64 @@
+
+services:
+
+  # ---------------------------------------------
+  # BASE DE DATOS: PostgreSQL
+  # ---------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: helpdesk_db
+    restart: always
+    environment:
+      POSTGRES_USER: helpdesk_user
+      POSTGRES_PASSWORD: helpdesk_password
+      POSTGRES_DB: helpdesk_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk_user -d helpdesk_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------
+  # BACKEND: FastAPI (Python)
+  # ---------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: helpdesk_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://helpdesk_user:helpdesk_password@db:5432/helpdesk_db
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ---------------------------------------------
+  # FRONTEND: React (Vite + TailwindCSS)
+  # ---------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: helpdesk_frontend
+    restart: always
+    ports:
+      - "5173:5173" # Puerto por defecto de Vite
+    environment:
+      - VITE_API_URL=http://localhost:8000 # URL para que React se comunique con FastAPI
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
