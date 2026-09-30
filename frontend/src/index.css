@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+    /* Definimos tu paleta de colores personalizada */
+    --color-brand-primary: #87CCC9;
+    --color-brand-dark: #4E8D31;
+    --color-brand-light: #3EBAC3;
+    --color-brand-accent: #A9C948;
+    --color-brand-black: #282D36;
+}
+
+/* Habilitar el cambio de modo oscuro mediante la clase "dark" en HTML */
+@custom-variant dark (&:is(.dark *));
