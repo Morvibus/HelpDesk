@@ -5,47 +5,46 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 
 ## Estado actual (2026-10-07)
 
-- Fases commiteadas (sin push): Fase 1 (P0) `0571924`, Fase 2 (P1) `d91ac83`, docs `236375c`,
-  **Fase 3 (P2) `68fab0d`**. `origin/main` sigue en `e51bec6`: push solo cuando el usuario lo indique.
-- Fase 3 (P2) implementada y verificada:
-  1. Alembic configurado: `alembic.ini` + `alembic/` (env.py lee `DATABASE_URL` del entorno y
-     apunta a `models.Base.metadata`). Migración inicial `4abf7e7a664b` con guards por tabla:
-     las DBs creadas con el `create_all` antiguo quedan en `head` sin tocar datos.
-  2. `entrypoint.sh` → `alembic upgrade head` antes de uvicorn (si falla, no arranca); `create_all`
-     eliminado de `main.py`.
-  3. Paginación `{items, total}` con `limit` (1-200, def. 50) / `offset >= 0` en `/tickets/`,
-     `/users/` y `/tickets/{id}/messages`; orden estable con id como desempate; mensajes más
-     recientes primero.
-  4. Frontend: Dashboard con "Cargar más" (y total real en "Total Histórico"); TicketDetail invierte
-     el historial del chat, añade "cargar anteriores" preservando el scroll, keys por `msg.id`.
-  5. Tests: 53 en verde (`+test_pagination`, `+test_migrations` que valida la migración contra DB
-     vacía y contra DB previa de create_all).
-- Verificado: pytest 53/53 (EXIT=0), lint 0 warnings, build OK, smoke en vivo (`limit=2`→200,
-  `limit=999`→422, `offset=1000`→vacío, `helpdesk_db` en `head` con datos intactos).
+- **Todo pusheado** (`origin/main` = `54096d7`): Fase 1 `0571924`, Fase 2 `d91ac83`, Fase 3 `68fab0d`,
+  docs `6e28ac7`, y `test_upload.py` (cambio del usuario) incluido en "Actualizacion menor" `54096d7`.
+- Backend Fase 3 (P2): Alembic (`4abf7e7a664b` con guards por tabla) + entrypoint automático +
+  paginación `{items,total}` en los 3 listados. 53 tests en verde; `helpdesk_db` en `head`.
+- Frontend · análisis de prácticas → 3 fases implementadas y verificadas (lint 0 + build OK), **pendientes de commit**:
+  - **F1 (P1)**: interceptor 401 (logout+redirect, excluye `/login`), `ProtectedRoute` valida `exp`,
+    `initTheme()` en `main.jsx` (el tema oscuro YA persiste al recargar), reconexión WS con backoff
+    (1s→15s) en notificaciones y chat + toast si se envía sin socket, `AbortController` en cargas.
+  - **F2 (P2)**: error boundary global, Login distingue credenciales vs red/servidor, badge/labels
+    para prioridad `urgent`, JWT decode centralizado (`decodeToken`/`isTokenExpired` en authStore).
+  - **F3 (P3)**: a11y (`htmlFor`, `aria-label`), `/login` redirige con sesión válida, se quitó
+    `apple-touch-icon` inexistente (404).
+- Pendientes del análisis frontend: **F5** (KPIs del Dashboard calculados sobre la página cargada)
+  y **`.oxlintrc.json`** (reglas estrictas — archivo nuevo, requiere permiso).
 
 ## Decisiones (y por qué)
 
-- Migraciones automáticas en el entrypoint: sin CI ni Python local, un paso manual se olvidaría;
-  una sola ejecución antes del fork de gunicorn evita carreras.
-- Guards por tabla solo en la migración inicial (deuda de que `create_all` fue el mecanismo hasta hoy).
-- `limit/offset` + `{items, total}` y no cursores: volumen pequeño; el orden estable evita
-  solapes/saltos entre páginas.
-- Mensajes orden desc en la API: la primera página es la cola del chat; el frontend invierte.
-- Tests de migraciones en `helpdesk_migrate_test` (creada y borrada por el propio test).
-- httpx en vez de httpx2 (lo aprobó el usuario); starlette 1.7 avisa de deprecación — vigilar.
+- Migraciones automáticas en entrypoint (sin CI un paso manual se olvidaría); guards solo en la
+  migración inicial (deuda de `create_all`).
+- Paginación `limit/offset + {items,total}` con id como desempate; mensajes desc (primera página =
+  cola del chat), el frontend invierte.
+- 401 global → logout en `api.js`: sin eso el usuario queda con sesión zombie tras expirar el JWT.
+- `initTheme` se llama en `main.jsx` antes del render: la clase `dark` debe aplicarse al cargar.
+- Reconexión WS con backoff: el backend se reinicia con cada migración; sin reconexión el chat muere
+  en silencio. El botón deshabilitado no bloquea Enter en un form → el handler revalida el socket.
+- Error boundary como clase en `App.jsx` (React no permite boundaries funcionales).
+- httpx en vez de httpx2 (lo aprobó el usuario); starlette avisa de deprecación — vigilar.
 
 ## Aprendizajes y errores a evitar
 
-- Nunca `git add -A`; stagear rutas explícitas (commitear el WIP del usuario antes que el trabajo propio).
-- Cambios en modelos → `alembic revision --autogenerate` + revisar diff (nada de `docker compose down -v`).
-- Notas privadas se filtran en dos sitios (query REST y `ConnectionManager.broadcast`): actualizar ambos.
-- Fuera de Docker, `DATABASE_URL` debe apuntar a `localhost` (`.env` apunta al hostname `db`).
-- FastAPI valida el body antes de ejecutar la ruta: para probar `POST /users/` hace falta `name` (no `full_name`).
-- `email-validator` rechaza dominios reservados (`.local`, `.test`...): en datos de prueba usar
-  dominios inventados como `@helpdesk-mock.com`.
-- `/upload-image/` existe en el backend pero ningún componente del frontend lo usa ni renderiza imágenes.
+- Nunca `git add -A`; stagear rutas explícitas; commitear el WIP del usuario antes que el trabajo propio.
+- Modelos → `alembic revision --autogenerate` + revisar diff (nada de `docker compose down -v`).
+- Notas privadas se filtran en dos sitios (REST y `ConnectionManager.broadcast`): actualizar ambos.
+- Fuera de Docker, `DATABASE_URL` apunta a `localhost` (`.env` usa el hostname `db`).
+- `email-validator` rechaza dominios reservados: usar `@helpdesk-mock.com` en datos de prueba.
+- `atob` puro rompe con base64url (`-`/`_`): usar `decodeToken` del authStore.
+- Tema oscuro: si se define `initTheme()` hay que llamarlo, si no la UI recarga en modo claro.
 
 ## Próximos pasos
 
-- Push a `origin` solo cuando el usuario lo indique (locales: `0571924`, `d91ac83`, `236375c`, `68fab0d`).
+- Decidir **F5**: métricas del Dashboard (¿usar `/metrics/` para tech/admin? ¿qué ven los empleados?).
+- Crear **`.oxlintrc.json`** con reglas estrictas solo si el usuario lo aprueba (archivo nuevo).
 - Vigilar httpx → httpx2 cuando Starlette quite el soporte a httpx en testclient.
