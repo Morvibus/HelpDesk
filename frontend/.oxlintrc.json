@@ -1,0 +1,15 @@
+{
+  "$schema": "https://oxc-project.github.io/json-schemas/oxlint.json",
+  "plugins": ["react", "react_perf", "react_hooks"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/set-state-in-effect": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "react/no-array-index-key": "warn",
+    "react/hook-use-state": "warn"
+  }
+}

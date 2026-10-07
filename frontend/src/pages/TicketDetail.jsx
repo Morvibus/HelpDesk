@@ -82,11 +82,13 @@ export default function TicketDetail() {
         }
     }
 
+    // oxlint-disable react/exhaustive-effect-dependencies -- token y refreshTrigger recargan a propósito
     useEffect(() => {
         const controller = new AbortController()
         fetchTicketData(controller.signal)
         return () => controller.abort()
     }, [id, token, refreshTrigger])
+    // oxlint-enable react/exhaustive-effect-dependencies
 
     // 2. Conectar WebSocket (con reconexión por si el backend se cae)
     useEffect(() => {
@@ -137,6 +139,7 @@ export default function TicketDetail() {
     }, [id, token])
 
     // 3. Scroll automático (y mantener la posición al precargar el historial)
+    // oxlint-disable react/exhaustive-effect-dependencies -- messages dispara el scroll a propósito
     useEffect(() => {
         if (mantenerScrollRef.current) {
             mantenerScrollRef.current = false
@@ -148,6 +151,7 @@ export default function TicketDetail() {
         }
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }, [messages])
+    // oxlint-enable react/exhaustive-effect-dependencies
 
     // 4. Enviar Mensaje (ahora con soporte para nota privada)
     const handleSendMessage = (e) => {

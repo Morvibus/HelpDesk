@@ -574,30 +574,35 @@ def get_metrics(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
-    # REGLA DE NEGOCIO: Solo técnicos y administradores pueden ver el dashboard
+    # Alcance por rol: el empleado solo cuenta SUS tickets; tech/admin ven todo el tablero.
     if current_user.role == models.RoleEnum.employee:
-        raise HTTPException(status_code=403, detail="No tienes permisos para ver el dashboard")
+        query = db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id)
+        resolved_by_tech = {}
+    else:
+        query = db.query(models.Ticket)
+        resolved_by_tech = {
+            name: count for name, count in db.query(models.User.name, func.count(models.Ticket.id))
+            .join(models.Ticket, models.User.id == models.Ticket.assigned_to)
+            .filter(models.Ticket.status.in_([models.StatusEnum.solved, models.StatusEnum.closed]))
+            .group_by(models.User.name).all()
+        }
 
-    # 1. Total histórico de tickets
-    total_tickets = db.query(models.Ticket).count()
+    # 1. Total histórico de tickets (del alcance)
+    total_tickets = query.count()
 
     # 2. Conteo de tickets agrupados por su estado actual
-    status_counts = db.query(models.Ticket.status, func.count(models.Ticket.id)).group_by(models.Ticket.status).all()
+    status_counts = (
+        query.with_entities(models.Ticket.status, func.count(models.Ticket.id))
+        .group_by(models.Ticket.status).all()
+    )
     tickets_by_status = {status.value: count for status, count in status_counts}
 
-    # 3. Cálculo de tiempo promedio de resolución (en horas)
-    resolved_tickets = db.query(models.Ticket).filter(models.Ticket.closed_at.isnot(None)).all()
+    # 3. Cálculo de tiempo promedio de resolución (en horas) sobre el alcance
+    resolved_tickets = query.filter(models.Ticket.closed_at.isnot(None)).all()
     avg_time_hours = 0.0
     if resolved_tickets:
         total_seconds = sum((t.closed_at - t.created_at).total_seconds() for t in resolved_tickets)
         avg_time_hours = (total_seconds / len(resolved_tickets)) / 3600
-
-    # 4. Productividad: Tickets solucionados o cerrados por cada técnico
-    tech_counts = db.query(models.User.name, func.count(models.Ticket.id))\
-        .join(models.Ticket, models.User.id == models.Ticket.assigned_to)\
-        .filter(models.Ticket.status.in_([models.StatusEnum.solved, models.StatusEnum.closed]))\
-        .group_by(models.User.name).all()
-    resolved_by_tech = {name: count for name, count in tech_counts}
 
     return {
         "total_tickets": total_tickets,

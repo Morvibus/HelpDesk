@@ -6,78 +6,18 @@ import { AlertCircle, Clock, CheckCircle2, Inbox, Briefcase, LayoutGrid, Archive
 import { useUIStore } from '../store/uiStore'
 import { useNavigate } from 'react-router-dom'
 
-export default function Dashboard() {
-    const [tickets, setTickets] = useState([])
-    const [totalTickets, setTotalTickets] = useState(0)
-    const [loading, setLoading] = useState(true)
-    const [loadingMore, setLoadingMore] = useState(false)
-    const [activeTab, setActiveTab] = useState('board')
+// --- Componentes de tablero a nivel de módulo (no se redefinen por render) ---
 
-    const token = useAuthStore(state => state.token)
-    const role = useAuthStore(state => state.role)
-    const { refreshTrigger, unreadTickets } = useUIStore()
+const getPriorityBadge = (priority) => {
+    const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30', urgent: 'text-white bg-red-600 dark:bg-red-700' }
+    const labels = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' }
+    return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${styles[priority] || ''}`}>{labels[priority] || priority}</span>
+}
+
+const TicketCard = ({ ticket }) => {
     const navigate = useNavigate()
-
-    const isTech = role !== 'employee'
-
-    useEffect(() => {
-        // Cancela la carga si cambia el refresh o el componente se desmonta:
-        // evita que una respuesta tardía pise datos más recientes.
-        const controller = new AbortController()
-
-        const fetchTickets = async () => {
-            try {
-                const response = await api.get('/tickets/', { signal: controller.signal })
-                setTickets(response.data.items)
-                setTotalTickets(response.data.total)
-            } catch (error) {
-                if (error.code === 'ERR_CANCELED') return
-                console.error("Error al cargar tickets:", error)
-            } finally {
-                setLoading(false)
-            }
-        }
-        fetchTickets()
-        return () => controller.abort()
-    }, [token, refreshTrigger])
-
-    // Carga la siguiente página y la añade a la lista
-    const loadMoreTickets = async () => {
-        setLoadingMore(true)
-        try {
-            const response = await api.get(`/tickets/?offset=${tickets.length}`)
-            setTickets(prev => [...prev, ...response.data.items])
-            setTotalTickets(response.data.total)
-        } catch (error) {
-            console.error("Error al cargar más tickets:", error)
-        } finally {
-            setLoadingMore(false)
-        }
-    }
-
-    const unassignedTickets = tickets.filter(t => t.status === 'created').length
-    const activeTickets = tickets.filter(t => ['created', 'assigned', 'in_process'].includes(t.status)).length
-    const solvedTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status)).length
-
-    const colCreated = tickets.filter(t => t.status === 'created')
-    const colAssigned = tickets.filter(t => t.status === 'assigned')
-    const colInProcess = tickets.filter(t => t.status === 'in_process')
-    const historyTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status))
-
-    const getPriorityBadge = (priority) => {
-        const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30', urgent: 'text-white bg-red-600 dark:bg-red-700' }
-        const labels = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' }
-        return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${styles[priority] || ''}`}>{labels[priority] || priority}</span>
-    }
-
-    const getStatusBadge = (status) => {
-        const styles = { solved: 'bg-brand-light/10 text-brand-primary dark:bg-brand-light/20 dark:text-brand-light border-brand-light/30', closed: 'bg-brand-dark text-white dark:bg-brand-black dark:border-gray-700' }
-        const labels = { solved: 'Solucionado', closed: 'Cerrado' }
-        return <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full border ${styles[status]}`}>{labels[status]}</span>
-    }
-
-    // --- COMPONENTES VISUALES ---
-    const TicketCard = ({ ticket }) => (
+    const unreadTickets = useUIStore(state => state.unreadTickets)
+    return (
         <div onClick={() => navigate(`/ticket/${ticket.id}`)} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md hover:border-brand-primary dark:hover:border-brand-light transition-all cursor-pointer group relative">
             {unreadTickets.includes(ticket.id) && (
                 <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
@@ -96,16 +36,93 @@ export default function Dashboard() {
             </div>
         </div>
     )
+}
 
-    const ColumnEmptyState = ({ icon: Icon, title, message }) => (
-        <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-gray-200 dark:border-gray-700/60 rounded-xl bg-white/50 dark:bg-gray-800/30">
-            <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-full mb-3">
-                <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-            </div>
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{title}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-50 mx-auto">{message}</p>
+const ColumnEmptyState = ({ icon: Icon, title, message }) => (
+    <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-gray-200 dark:border-gray-700/60 rounded-xl bg-white/50 dark:bg-gray-800/30">
+        <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-full mb-3">
+            <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
         </div>
-    )
+        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{title}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-50 mx-auto">{message}</p>
+    </div>
+)
+
+export default function Dashboard() {
+    const [tickets, setTickets] = useState([])
+    const [totalTickets, setTotalTickets] = useState(0)
+    const [metrics, setMetrics] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [activeTab, setActiveTab] = useState('board')
+
+    const token = useAuthStore(state => state.token)
+    const role = useAuthStore(state => state.role)
+    const refreshTrigger = useUIStore(state => state.refreshTrigger)
+    const navigate = useNavigate()
+
+    const isTech = role !== 'employee'
+
+    // oxlint-disable react/exhaustive-effect-dependencies -- token y refreshTrigger recargan a propósito
+    useEffect(() => {
+        // Cancela la carga si cambia el refresh o el componente se desmonta:
+        // evita que una respuesta tardía pise datos más recientes.
+        const controller = new AbortController()
+
+        const fetchDashboardData = async () => {
+            try {
+                const [ticketsRes, metricsRes] = await Promise.all([
+                    api.get('/tickets/', { signal: controller.signal }),
+                    api.get('/metrics/', { signal: controller.signal })
+                ])
+                setTickets(ticketsRes.data.items)
+                setTotalTickets(ticketsRes.data.total)
+                setMetrics(metricsRes.data)
+            } catch (error) {
+                if (error.code === 'ERR_CANCELED') return
+                console.error("Error al cargar tickets:", error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchDashboardData()
+        return () => controller.abort()
+    }, [token, refreshTrigger])
+    // oxlint-enable react/exhaustive-effect-dependencies
+
+    // Carga la siguiente página y la añade a la lista
+    const loadMoreTickets = async () => {
+        setLoadingMore(true)
+        try {
+            const response = await api.get(`/tickets/?offset=${tickets.length}`)
+            setTickets(prev => [...prev, ...response.data.items])
+            setTotalTickets(response.data.total)
+        } catch (error) {
+            console.error("Error al cargar más tickets:", error)
+        } finally {
+            setLoadingMore(false)
+        }
+    }
+
+    // KPIs reales del servidor (GET /metrics/): el empleado cuenta solo sus tickets
+    const tbs = metrics?.tickets_by_status || {}
+    const creados = tbs.created || 0
+    const asignados = tbs.assigned || 0
+    const enProceso = tbs.in_process || 0
+    const resueltos = (tbs.solved || 0) + (tbs.closed || 0)
+    const activos = creados + asignados + enProceso
+    const totalMetricas = metrics?.total_tickets ?? totalTickets
+
+    const colCreated = tickets.filter(t => t.status === 'created')
+    const colAssigned = tickets.filter(t => t.status === 'assigned')
+    const colInProcess = tickets.filter(t => t.status === 'in_process')
+    const historyTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status))
+
+    const getStatusBadge = (status) => {
+        const styles = { solved: 'bg-brand-light/10 text-brand-primary dark:bg-brand-light/20 dark:text-brand-light border-brand-light/30', closed: 'bg-brand-dark text-white dark:bg-brand-black dark:border-gray-700' }
+        const labels = { solved: 'Solucionado', closed: 'Cerrado' }
+        return <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full border ${styles[status]}`}>{labels[status]}</span>
+    }
 
     return (
         <Layout>
@@ -116,7 +133,7 @@ export default function Dashboard() {
                     </div>
                     <div className="ml-5">
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{isTech ? 'Nuevos (Sin Asignar)' : 'Mis Tickets Activos'}</p>
-                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? unassignedTickets : activeTickets}</p>
+                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? creados : activos}</p>
                     </div>
                 </div>
 
@@ -126,7 +143,7 @@ export default function Dashboard() {
                     </div>
                     <div className="ml-5">
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{isTech ? 'Total en Proceso' : 'Solucionados'}</p>
-                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? (activeTickets - unassignedTickets) : solvedTickets}</p>
+                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? (asignados + enProceso) : resueltos}</p>
                     </div>
                 </div>
 
@@ -136,7 +153,7 @@ export default function Dashboard() {
                     </div>
                     <div className="ml-5">
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{isTech ? 'Total Resueltos' : 'Total Histórico'}</p>
-                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? solvedTickets : totalTickets}</p>
+                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? resueltos : totalMetricas}</p>
                     </div>
                 </div>
             </div>

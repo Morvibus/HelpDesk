@@ -105,9 +105,19 @@ def test_notas_privadas_ocultas_para_el_empleado(client, db):
     assert sorted(m["content"] for m in como_tecnico) == ["nota interna", "respuesta publica"]
 
 
-def test_metricas_prohibidas_para_empleado(client, db):
+def test_metricas_empleado_solo_cuentan_sus_tickets(client, db):
     empleado = create_user(db, "employee")
-    assert client.get("/metrics/", headers=auth_headers(empleado)).status_code == 403
+    otro_empleado = create_user(db, "employee")
+    create_ticket(db, empleado.id)
+    create_ticket(db, empleado.id)
+    create_ticket(db, otro_empleado.id)  # ajeno: no debe contar
+
+    r = client.get("/metrics/", headers=auth_headers(empleado))
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_tickets"] == 2
+    assert data["tickets_by_status"]["created"] == 2
+    assert data["resolved_by_technician"] == {}
 
 
 def test_metricas_permitidas_para_tecnico_y_admin(client, db):
