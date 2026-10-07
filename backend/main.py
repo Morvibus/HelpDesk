@@ -423,12 +423,15 @@ class ConnectionManager:
             ]
 
     async def broadcast(self, message: dict, ticket_id: int):
-        if ticket_id in self.active_connections:
-            for connection in self.active_connections[ticket_id]:
-                # REGLA DE SEGURIDAD: Si es nota privada, omitimos a los empleados
-                if message.get("is_private_note") and connection["role"] == "employee":
-                    continue
+        for connection in list(self.active_connections.get(ticket_id, [])):
+            # REGLA DE SEGURIDAD: Si es nota privada, omitimos a los empleados
+            if message.get("is_private_note") and connection["role"] == "employee":
+                continue
+            try:
                 await connection["ws"].send_json(message)
+            except Exception:
+                # Socket muerto: lo retiramos sin abortar el envío al resto
+                self.disconnect(connection["ws"], ticket_id)
 
 manager = ConnectionManager()
 
@@ -445,6 +448,24 @@ def _ws_subprotocol_token(websocket: WebSocket) -> tuple[str, str]:
     if len(parts) == 2 and parts[0] == "auth":
         return parts[0], parts[1]
     return None, None
+
+
+def _save_chat_message(db, ticket_id: int, user_id: int, content: str, is_private: bool) -> models.Message:
+    """Guarda un mensaje de chat (síncrono; llamar con asyncio.to_thread).
+
+    El refresh final pobla todos los atributos para que el hilo del event loop
+    pueda leerlos sin disparar una consulta lazy.
+    """
+    new_message = models.Message(
+        ticket_id=ticket_id,
+        sender_id=user_id,
+        content=content,
+        is_private_note=is_private
+    )
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
+    return new_message
 
 
 @app.websocket("/ws/tickets/{ticket_id}/chat")
@@ -465,7 +486,11 @@ async def chat_websocket(
         return
 
     # REGLA DE SEGURIDAD: solo el dueño del ticket o técnicos/administradores entran al chat
-    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    # (la sesión SQL es síncrona: se consulta con to_thread para no bloquear el event loop;
+    #  el uso es secuencial, así que la misma sesión no se comparte en paralelo)
+    ticket = await asyncio.to_thread(
+        lambda: db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    )
     if ticket is None or (ticket.created_by != user_id and user_role not in ("technician", "admin")):
         print(f" [Chat] Acceso denegado al ticket #{ticket_id} para usuario {user_id}")
         await websocket.close(code=1008)
@@ -478,17 +503,11 @@ async def chat_websocket(
         while True:
             data = await websocket.receive_json()
             
-            # 1. Guardamos en base de datos
+            # 1. Guardamos en base de datos (síncrono → fuera del event loop)
             is_private = data.get("is_private_note", False)
-            new_message = models.Message(
-                ticket_id=ticket_id,
-                sender_id=user_id,
-                content=data["content"],
-                is_private_note=is_private
+            new_message = await asyncio.to_thread(
+                _save_chat_message, db, ticket_id, user_id, data["content"], is_private
             )
-            db.add(new_message)
-            db.commit()
-            db.refresh(new_message)
             
             # 2. El broadcast para los que están viendo el chat
             await manager.broadcast({
@@ -500,8 +519,9 @@ async def chat_websocket(
             }, ticket_id)
             
             # 3. ALERTA GLOBAL PARA LOS QUE ESTÁN EN EL DASHBOARD
-            # (¡Ahora está correctamente dentro del while True!)
-            db_ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+            db_ticket = await asyncio.to_thread(
+                lambda: db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+            )
             msg_resumen = new_message.content[:30] + "..." if len(new_message.content) > 30 else new_message.content
                     
             if user_role == "employee":
@@ -516,7 +536,10 @@ async def chat_websocket(
                     await notifier.notify_user(db_ticket.created_by, f"Soporte IT (Ticket #{ticket_id})", msg_resumen, "💬", "new_message", ticket_id, exclude_user_id=user_id)  
             
     except WebSocketDisconnect:
-        # Esto es lo único que debe pasar al salir
+        # El cliente cerró la pestaña
+        pass
+    finally:
+        # Siempre damos de baja la conexión, aunque salga por un error distinto
         manager.disconnect(websocket, ticket_id)
 
 # Metricas
@@ -612,30 +635,44 @@ def reopen_ticket(
 # --- GESTOR DE NOTIFICACIONES GLOBALES ---
 class NotificationManager:
     def __init__(self):
-        self.active_connections: dict[int, dict] = {}
+        # Un usuario puede tener varias pestañas abiertas: lista de conexiones por usuario
+        self.active_connections: dict[int, list[dict]] = {}
 
     async def connect(self, websocket: WebSocket, user_id: int, role: str, subprotocol: str = None):
         await websocket.accept(subprotocol=subprotocol)
-        self.active_connections[user_id] = {"ws": websocket, "role": role}
+        self.active_connections.setdefault(user_id, []).append({"ws": websocket, "role": role})
 
-    def disconnect(self, user_id: int):
-        self.active_connections.pop(user_id, None)
+    def disconnect(self, websocket: WebSocket, user_id: int):
+        # Solo se retira LA pestaña que se desconecta; las demás siguen vivas
+        conns = self.active_connections.get(user_id, [])
+        conns[:] = [c for c in conns if c["ws"] is not websocket]
+        if not conns:
+            self.active_connections.pop(user_id, None)
 
-# Añadimos el parámetro exclude_user_id
+    async def _send_safe(self, user_id: int, conn: dict, payload: dict):
+        try:
+            await conn["ws"].send_json(payload)
+        except Exception:
+            # Socket muerto: se da de baja sin romper el resto de envíos
+            self.disconnect(conn["ws"], user_id)
+
     async def notify_user(self, user_id: int, title: str, message: str, icon: str = "🔔", msg_type: str = "toast", ticket_id: int = None, exclude_user_id: int = None):
         # Verificamos que el destinatario no sea la misma persona que originó el mensaje
-        if user_id in self.active_connections and user_id != exclude_user_id:
-            await self.active_connections[user_id]["ws"].send_json({
-                "type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id
-            })
+        if user_id == exclude_user_id:
+            return
+        payload = {"type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id}
+        for conn in list(self.active_connections.get(user_id, [])):
+            await self._send_safe(user_id, conn, payload)
 
     async def notify_techs(self, title: str, message: str, icon: str = "🔔", msg_type: str = "toast", ticket_id: int = None, exclude_user_id: int = None):
-        for uid, conn in self.active_connections.items():
-            # Filtramos para que no le llegue a los empleados NI al técnico que envió el mensaje
-            if conn["role"] != "employee" and uid != exclude_user_id:
-                await conn["ws"].send_json({
-                    "type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id
-                })
+        payload = {"type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id}
+        for uid, conns in list(self.active_connections.items()):
+            # Filtramos para que no le llegue a los empleados NI al usuario que originó el mensaje
+            if uid == exclude_user_id:
+                continue
+            for conn in list(conns):
+                if conn["role"] != "employee":
+                    await self._send_safe(uid, conn, payload)
 
 
 notifier = NotificationManager()
@@ -662,4 +699,4 @@ async def global_notifications(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        notifier.disconnect(user_id)
+        notifier.disconnect(websocket, user_id)

@@ -1,7 +1,8 @@
 # AGENTS.md
 
 HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas por `docker-compose.yml`.
-**No hay CI, tests ni typecheck** — el `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que existe.
+**No hay CI ni typecheck**; el backend sí tiene tests con pytest (unitarios + integración), el frontend no.
+El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que existe.
 
 ## Estructura
 
@@ -22,9 +23,12 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 - Verificación del frontend (las únicas checks que existen, en este orden):
   - `npm run lint` — oxlint **sin archivo de configuración**, así que usa reglas por defecto
   - `npm run build`
-- El backend no tiene lint ni tests. La verificación más rápida es importar la app con una DB alcanzable:
-  `cd backend && python -c "import main"` (ejecuta `create_all` al importar).
-- No existe forma de correr un solo test — no hay tests. La verificación manual es por Swagger en `/docs`.
+- Tests del backend (45 tests; requiere `db` levantado; usan la base `helpdesk_test`, nunca `helpdesk_db`):
+  `docker compose run --rm backend python -m pytest`
+  Usa `python -m pytest` (no `pytest`) para que `/app` entre en `sys.path`; un solo test:
+  `docker compose run --rm backend python -m pytest tests/test_auth.py::test_login_form_encoded`.
+  Estructura: `backend/tests/` (`conftest.py` + auth, permisos, upload, websockets).
+- No hay lint en el backend; verificación puntual: `cd backend && python -c "import main"` (con DB alcanzable).
 
 ## Gotchas de entorno / base de datos
 
@@ -40,6 +44,8 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 - `SECRET_KEY` es obligatoria: `security.py` lanza `RuntimeError` al importar si falta (ya no hay fallback).
   Compose la inyecta con `env_file: ./backend/.env` (archivo local, no trackeado); sin ese archivo,
   `docker compose up` falla al arrancar el backend.
+- `email-validator` rechaza dominios reservados en campos `EmailStr` (`.local`, `.test`, `.example`...):
+  para datos de prueba usar dominios inventados como `@helpdesk-mock.com`.
 
 ## Rarezas de la API
 
@@ -89,6 +95,11 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 
 ## Limites
 
-Siempre: actualizar `MEMORY.md` al terminar cada tarea.
-Pregunta antes: crear archivos nuevos, cambiar el formato de los datos guardados.
-Nunca: añadir dependencias, frameworks o un paso de build
+Siempre: 
+  -actualizar `MEMORY.md` al terminar cada tarea.
+Pregunta antes:
+  -crear archivos nuevos, cambiar el formato de los datos guardados.
+Nunca: 
+  -preguntar si hacer un push, (los push solo se haran cuando el usuario lo indique)
+  -añadir dependencias, frameworks o un paso de build
+  -borrar algo de proximos pasos en 'MEMORY.md' si no ha sido reuelto o descartado
