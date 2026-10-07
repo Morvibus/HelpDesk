@@ -9,7 +9,7 @@ def test_empleado_solo_ve_sus_tickets(client, db):
     t_mio = create_ticket(db, mio.id)
     create_ticket(db, ajeno.id)
 
-    ids = [t["id"] for t in client.get("/tickets/", headers=auth_headers(mio)).json()]
+    ids = [t["id"] for t in client.get("/tickets/", headers=auth_headers(mio)).json()["items"]]
     assert ids == [t_mio.id]
 
 
@@ -21,7 +21,7 @@ def test_tecnico_ve_no_asignados_y_los_suyos(client, db):
     mio = create_ticket(db, empleado.id, assigned_to=tecnico.id)
     create_ticket(db, empleado.id, assigned_to=otro_tecnico.id)
 
-    ids = [t["id"] for t in client.get("/tickets/", headers=auth_headers(tecnico)).json()]
+    ids = [t["id"] for t in client.get("/tickets/", headers=auth_headers(tecnico)).json()["items"]]
     assert sorted(ids) == sorted([sin_asignar.id, mio.id])
 
 
@@ -31,7 +31,7 @@ def test_admin_ve_todos_los_tickets(client, db):
     t1 = create_ticket(db, empleado.id)
     t2 = create_ticket(db, empleado.id)
 
-    ids = [t["id"] for t in client.get("/tickets/", headers=auth_headers(admin)).json()]
+    ids = [t["id"] for t in client.get("/tickets/", headers=auth_headers(admin)).json()["items"]]
     assert sorted(ids) == sorted([t1.id, t2.id])
 
 
@@ -98,10 +98,10 @@ def test_notas_privadas_ocultas_para_el_empleado(client, db):
     )
     db.commit()
 
-    como_empleado = client.get(f"/tickets/{ticket.id}/messages", headers=auth_headers(empleado)).json()
+    como_empleado = client.get(f"/tickets/{ticket.id}/messages", headers=auth_headers(empleado)).json()["items"]
     assert [m["content"] for m in como_empleado] == ["respuesta publica"]
 
-    como_tecnico = client.get(f"/tickets/{ticket.id}/messages", headers=auth_headers(tecnico)).json()
+    como_tecnico = client.get(f"/tickets/{ticket.id}/messages", headers=auth_headers(tecnico)).json()["items"]
     assert sorted(m["content"] for m in como_tecnico) == ["nota interna", "respuesta publica"]
 
 

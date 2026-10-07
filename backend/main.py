@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from database import engine, get_db
+from database import get_db
 from jose import JWTError, jwt 
 from datetime import datetime, timezone, timedelta
 from security import SECRET_KEY, ALGORITHM
@@ -16,7 +16,8 @@ import os
 import uuid
 import asyncio
 
-models.Base.metadata.create_all(bind=engine)
+# El schema lo gestiona Alembic (ver entrypoint.sh): `alembic upgrade head`
+# al arrancar el contenedor. `create_all` ya no se usa.
 
 app = FastAPI(title="HelpDesk API", description="Canal oficial de resolución de problemas")
 
@@ -169,16 +170,21 @@ def create_ticket(
 
 # mostrar todos los empleados, técnicos y administradores 
 
-@app.get("/users/", response_model=list[schemas.UserResponse])
+@app.get("/users/", response_model=schemas.Page[schemas.UserResponse])
 def get_users(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     # REGLA DE NEGOCIO: Solo los administradores pueden ver la lista de usuarios
     if current_user.role != models.RoleEnum.admin:
         raise HTTPException(status_code=403, detail="No tienes permisos para ver la lista de usuarios")
-    
-    return db.query(models.User).all()
+
+    query = db.query(models.User)
+    total = query.count()
+    users = query.order_by(models.User.id.asc()).offset(offset).limit(limit).all()
+    return {"items": users, "total": total}
 
 # modificar password de un usuario (solo admin puede cambiar el password de otros usuarios)
 @app.patch("/users/{user_id}/password", response_model=schemas.UserResponse)
@@ -210,24 +216,34 @@ def update_user_password(
     
     return user
 
-@app.get("/tickets/", response_model=list[schemas.TicketResponse])
+@app.get("/tickets/", response_model=schemas.Page[schemas.TicketResponse])
 def get_tickets(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user) # <- Requiere token válido
 ):
     # REGLA DE NEGOCIO: Visibilidad según el rol
     if current_user.role == models.RoleEnum.employee:
         # El empleado solo ve los tickets que él creó
-        return db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id).order_by(models.Ticket.priority.desc(), models.Ticket.created_at.desc()).all()
-        
+        query = db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id)
     elif current_user.role == models.RoleEnum.technician:
         # El técnico ve los no asignados o los asignados a él
-        return db.query(models.Ticket).filter(
+        query = db.query(models.Ticket).filter(
             (models.Ticket.assigned_to == None) | (models.Ticket.assigned_to == current_user.id)
-        ).order_by(models.Ticket.priority.desc(), models.Ticket.created_at.desc()).all()
-        
-    # Si es admin, ve todos
-    return db.query(models.Ticket).order_by(models.Ticket.priority.desc(), models.Ticket.created_at.desc()).all()
+        )
+    else:
+        # Si es admin, ve todos
+        query = db.query(models.Ticket)
+
+    total = query.count()
+    # Orden estable con id como desempate: así offset no salta/repite filas entre páginas
+    tickets = query.order_by(
+        models.Ticket.priority.desc(),
+        models.Ticket.created_at.desc(),
+        models.Ticket.id.desc(),
+    ).offset(offset).limit(limit).all()
+    return {"items": tickets, "total": total}
 
 @app.get("/tickets/{ticket_id}", response_model=schemas.TicketResponse)
 def get_ticket(
@@ -247,9 +263,11 @@ def get_ticket(
         
     return db_ticket
 
-@app.get("/tickets/{ticket_id}/messages", response_model=list[schemas.MessageResponse])
+@app.get("/tickets/{ticket_id}/messages", response_model=schemas.Page[schemas.MessageResponse])
 def get_ticket_messages(
     ticket_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -266,8 +284,15 @@ def get_ticket_messages(
     # REGLA DE NEGOCIO: Si es empleado, ocultamos las notas privadas de los técnicos
     if current_user.role == models.RoleEnum.employee:
         query = query.filter(models.Message.is_private_note == False)
-        
-    return query.order_by(models.Message.created_at.asc()).all()
+
+    total = query.count()
+    # Más recientes primero (id como desempate): la primera página es la cola
+    # del chat y offset avanza hacia el historial antiguo.
+    messages = query.order_by(
+        models.Message.created_at.desc(),
+        models.Message.id.desc(),
+    ).offset(offset).limit(limit).all()
+    return {"items": messages, "total": total}
 
 @app.patch("/tickets/{ticket_id}", response_model=schemas.TicketResponse)
 def update_ticket(

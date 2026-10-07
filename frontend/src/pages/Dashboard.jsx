@@ -8,7 +8,9 @@ import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
     const [tickets, setTickets] = useState([])
+    const [totalTickets, setTotalTickets] = useState(0)
     const [loading, setLoading] = useState(true)
+    const [loadingMore, setLoadingMore] = useState(false)
     const [activeTab, setActiveTab] = useState('board')
 
     const token = useAuthStore(state => state.token)
@@ -22,7 +24,8 @@ export default function Dashboard() {
         const fetchTickets = async () => {
             try {
                 const response = await api.get('/tickets/')
-                setTickets(response.data)
+                setTickets(response.data.items)
+                setTotalTickets(response.data.total)
             } catch (error) {
                 console.error("Error al cargar tickets:", error)
             } finally {
@@ -31,6 +34,20 @@ export default function Dashboard() {
         }
         fetchTickets()
     }, [token, refreshTrigger])
+
+    // Carga la siguiente página y la añade a la lista
+    const loadMoreTickets = async () => {
+        setLoadingMore(true)
+        try {
+            const response = await api.get(`/tickets/?offset=${tickets.length}`)
+            setTickets(prev => [...prev, ...response.data.items])
+            setTotalTickets(response.data.total)
+        } catch (error) {
+            console.error("Error al cargar más tickets:", error)
+        } finally {
+            setLoadingMore(false)
+        }
+    }
 
     const unassignedTickets = tickets.filter(t => t.status === 'created').length
     const activeTickets = tickets.filter(t => ['created', 'assigned', 'in_process'].includes(t.status)).length
@@ -113,7 +130,7 @@ export default function Dashboard() {
                     </div>
                     <div className="ml-5">
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{isTech ? 'Total Resueltos' : 'Total Histórico'}</p>
-                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? solvedTickets : tickets.length}</p>
+                        <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{isTech ? solvedTickets : totalTickets}</p>
                     </div>
                 </div>
             </div>
@@ -205,6 +222,18 @@ export default function Dashboard() {
                             </table>
                         </div>
                     )}
+                </div>
+            )}
+
+            {!loading && tickets.length < totalTickets && (
+                <div className="flex justify-center mt-6">
+                    <button
+                        onClick={loadMoreTickets}
+                        disabled={loadingMore}
+                        className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                        {loadingMore ? 'Cargando...' : `Cargar más (${tickets.length} de ${totalTickets})`}
+                    </button>
                 </div>
             )}
         </Layout>

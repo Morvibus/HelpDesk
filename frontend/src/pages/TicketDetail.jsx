@@ -22,6 +22,8 @@ export default function TicketDetail() {
 
     const [ticket, setTicket] = useState(null)
     const [messages, setMessages] = useState([])
+    const [messagesTotal, setMessagesTotal] = useState(0)
+    const [loadingOlder, setLoadingOlder] = useState(false)
     const [newMessage, setNewMessage] = useState('')
     const [isPrivateNote, setIsPrivateNote] = useState(false) // Nuevo estado para notas privadas
     const [loading, setLoading] = useState(true)
@@ -30,6 +32,9 @@ export default function TicketDetail() {
 
     const ws = useRef(null)
     const messagesEndRef = useRef(null)
+    const chatContainerRef = useRef(null)
+    const mantenerScrollRef = useRef(false)
+    const alturaAntesRef = useRef(0)
 
     useEffect(() => {
         removeUnreadTicket(Number(id))
@@ -40,14 +45,36 @@ export default function TicketDetail() {
         try {
             const [ticketRes, messagesRes] = await Promise.all([
                 api.get(`/tickets/${id}`),
-                api.get(`/tickets/${id}/messages`)
+                api.get(`/tickets/${id}/messages?limit=200`)
             ])
             setTicket(ticketRes.data)
-            setMessages(messagesRes.data)
+            // El backend pagina y devuelve los más recientes primero:
+            // los invertimos para mostrar el chat en orden cronológico
+            setMessages(messagesRes.data.items.slice().reverse())
+            setMessagesTotal(messagesRes.data.total)
         } catch (error) {
             console.error("Error al cargar datos", error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    // Carga el bloque anterior de mensajes y lo añade por arriba
+    const loadOlderMessages = async () => {
+        setLoadingOlder(true)
+        try {
+            const contenedor = chatContainerRef.current
+            alturaAntesRef.current = contenedor ? contenedor.scrollHeight : 0
+            mantenerScrollRef.current = true
+            const res = await api.get(`/tickets/${id}/messages?limit=200&offset=${messages.length}`)
+            const antiguos = res.data.items.slice().reverse()
+            setMessages(prev => [...antiguos, ...prev])
+            setMessagesTotal(res.data.total)
+        } catch (error) {
+            mantenerScrollRef.current = false
+            console.error("Error al cargar mensajes anteriores", error)
+        } finally {
+            setLoadingOlder(false)
         }
     }
 
@@ -84,8 +111,16 @@ export default function TicketDetail() {
         }
     }, [id, token])
 
-    // 3. Scroll automático
+    // 3. Scroll automático (y mantener la posición al precargar el historial)
     useEffect(() => {
+        if (mantenerScrollRef.current) {
+            mantenerScrollRef.current = false
+            const contenedor = chatContainerRef.current
+            if (contenedor) {
+                contenedor.scrollTop += contenedor.scrollHeight - alturaAntesRef.current
+            }
+            return
+        }
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }, [messages])
 
@@ -227,7 +262,16 @@ export default function TicketDetail() {
                     </div>
 
                     {/* Área de Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30 dark:bg-brand-black/30 flex flex-col">
+                    <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30 dark:bg-brand-black/30 flex flex-col">
+                        {messages.length < messagesTotal && (
+                            <button
+                                onClick={loadOlderMessages}
+                                disabled={loadingOlder}
+                                className="self-center px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            >
+                                {loadingOlder ? 'Cargando...' : `Cargar mensajes anteriores (${messages.length} de ${messagesTotal})`}
+                            </button>
+                        )}
                         {messages.length === 0 ? (
 
                             /* --- EMPTY STATE DEL CHAT --- */
@@ -246,12 +290,12 @@ export default function TicketDetail() {
                             </div>
 
                         ) : (
-                            messages.map((msg, index) => {
+                            messages.map((msg) => {
                                 const isMe = msg.sender_id === myUserId
                                 const isPrivate = msg.is_private_note
 
                                 return (
-                                    <div key={index} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                    <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                         <span className={`text-xs flex items-center text-gray-500 mb-1 ${isMe ? 'mr-1' : 'ml-1'}`}>
                                             {isPrivate && <Lock className="w-3 h-3 mr-1 text-yellow-500" />}
                                             {isMe ? 'Tú' : 'Soporte IT'}

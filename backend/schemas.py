@@ -1,7 +1,16 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 from datetime import datetime
 from models import StatusEnum, PriorityEnum, RoleEnum, ActionEnum
+
+# --- PAGINACIÓN ---
+ItemT = TypeVar("ItemT")
+
+
+class Page(BaseModel, Generic[ItemT]):
+    """Respuesta paginada: los items de la página actual y el total de resultados."""
+    items: list[ItemT]
+    total: int
 
 # --- SCHEMAS DE USUARIO ---
 class UserCreate(BaseModel):

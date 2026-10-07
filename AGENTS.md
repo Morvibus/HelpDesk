@@ -23,11 +23,15 @@ El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que exi
 - Verificación del frontend (las únicas checks que existen, en este orden):
   - `npm run lint` — oxlint **sin archivo de configuración**, así que usa reglas por defecto
   - `npm run build`
-- Tests del backend (45 tests; requiere `db` levantado; usan la base `helpdesk_test`, nunca `helpdesk_db`):
+- Tests del backend (53 tests; requiere `db` levantado; usan la base `helpdesk_test`, nunca `helpdesk_db`):
   `docker compose run --rm backend python -m pytest`
   Usa `python -m pytest` (no `pytest`) para que `/app` entre en `sys.path`; un solo test:
   `docker compose run --rm backend python -m pytest tests/test_auth.py::test_login_form_encoded`.
-  Estructura: `backend/tests/` (`conftest.py` + auth, permisos, upload, websockets).
+  Estructura: `backend/tests/` (auth, permisos, upload, websockets, paginación, migraciones).
+- Migraciones (Alembic): se aplican solas al arrancar (`entrypoint.sh` → `alembic upgrade head`).
+  Al cambiar modelos: `docker compose run --rm backend alembic revision --autogenerate -m "qué cambia"`
+  → revisar el diff en `backend/alembic/versions/` → commit. Validación:
+  `docker compose run --rm backend alembic check` debe decir "No new upgrade operations detected".
 - No hay lint en el backend; verificación puntual: `cd backend && python -c "import main"` (con DB alcanzable).
 
 ## Gotchas de entorno / base de datos
@@ -35,10 +39,10 @@ El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que exi
 - `backend/.env` y el fallback de `database.py` apuntan al hostname `db` (el nombre del servicio Docker).
   Correr uvicorn fuera de Docker falla hasta exportar:
   `DATABASE_URL=postgresql://helpdesk_user:helpdesk_password@localhost:5432/helpdesk_db`
-- El schema viene **solo** de `models.Base.metadata.create_all(bind=engine)` al importar `main.py`.
-  Alembic está en `requirements.txt` pero NO está configurado (no hay `alembic.ini` ni versions).
-  Cambios en los modelos NO alteran una tabla existente — recrear la DB
-  (`docker compose down -v`, destruye datos) o aplicar SQL manual.
+- El schema lo gestiona Alembic: `entrypoint.sh` ejecuta `alembic upgrade head` antes de uvicorn y,
+  si falla, el contenedor no arranca. `main.py` ya no crea tablas al importar; los tests solo usan
+  `create_all` para limpiar `helpdesk_test`. La migración inicial `4abf7e7a664b` lleva guards por
+  tabla: las DBs creadas con el `create_all` antiguo quedan en `head` sin tocar datos.
 - Dentro del contenedor, el `DATABASE_URL` de compose (usuario `helpdesk_user`) tiene prioridad sobre
   `backend/.env` (usuario `postgres`); difieren a propósito.
 - `SECRET_KEY` es obligatoria: `security.py` lanza `RuntimeError` al importar si falta (ya no hay fallback).
@@ -52,6 +56,10 @@ El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que exi
 - Para llamar al API desde el frontend usar `frontend/src/api.js`: `api` (axios con `baseURL` e interceptor
   JWT automático) y `wsUrl()` para WebSockets; la base sale de `VITE_API_URL` con fallback
   `http://localhost:8000` (`frontend/.env.example`). **Nunca** URLs absolutas ni headers `Authorization` manuales.
+- Los listados `GET /tickets/`, `GET /users/` y `GET /tickets/{id}/messages` devuelven
+  `{items, total}` paginado: `limit` (1-200, por defecto 50) y `offset >= 0`; fuera de rango → items
+  vacíos. Orden estable con `id` como desempate; los mensajes llegan más recientes primero y el
+  frontend los invierte para pintar el chat.
 - `POST /login` es OAuth2 **form-encoded** (`application/x-www-form-urlencoded`, campo `username` = email),
   no JSON. El rol para la UI se lee del payload del JWT en el cliente.
 - Auth: Bearer JWT (`sub` = id de usuario, el claim `role` maneja los permisos). Los endpoints WebSocket
