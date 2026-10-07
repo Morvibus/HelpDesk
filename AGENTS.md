@@ -81,7 +81,8 @@ El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que exi
 - Solo los empleados crean tickets; técnicos/admins los toman vía `PATCH /tickets`.
 - `POST /users/` crea el primer usuario sin token **solo** si la tabla está vacía (bootstrap);
   después exige token de administrador.
-- Reabrir solo dentro de las 72 h del cierre; `/metrics/` es solo para técnicos/admins.
+- Reabrir solo dentro de las 72 h del cierre; `/metrics/` es por rol: el empleado cuenta solo sus
+  tickets, técnicos y admins ven el tablero completo.
 
 ## Higiene de Git
 
