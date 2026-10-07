@@ -105,6 +105,7 @@ El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que exi
 
 Siempre: 
   -actualizar `MEMORY.md` al terminar cada tarea.
+  - Que se encuentre en un cambio que no realizaste preguntar si se conoce el cambio antes de analizar y si se agrega al commit, en caso de que la respuesta sea positiva agregalo al commit, caso contrario procede con la revision
 Pregunta antes:
   -crear archivos nuevos, cambiar el formato de los datos guardados.
 Nunca: 

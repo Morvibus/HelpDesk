@@ -43,8 +43,8 @@ def test_upload_usa_extension_del_content_type(client, db):
     ruta = os.path.join(main.UPLOAD_DIR, nombre)
     try:
         assert url.startswith("/static/")
-        assert nombre.endswith(".jpg")  # la extensión viene del content-type...
-        assert not nombre.endswith(".bin")  # ...nunca del filename
+        assert nombre.endswith(".jpg")  
+        assert not nombre.endswith(".bin") 
         assert os.path.exists(ruta)
     finally:
         if os.path.exists(ruta):
