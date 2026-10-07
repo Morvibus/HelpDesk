@@ -21,7 +21,8 @@ class UserResponse(BaseModel):
 
 # para actualizar la contraseña del usuario
 class UserPasswordUpdate(BaseModel):
-    old_password: str
+    # Obligatoria al cambiar la propia contraseña; opcional cuando un admin resetea otra
+    old_password: Optional[str] = None
     new_password: str
 
 # --- SCHEMAS DE TICKET ---

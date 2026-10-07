@@ -5,33 +5,36 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 
 ## Estado actual (2026-10-07)
 
-- Working tree **limpio y todo commiteado**: `1cad933` docs → `236b351` artefactos → `e1e6ed5` feat (WIP del usuario)
-  → `2222285` .gitattributes → `41aaf4e` README → `2390378` refactor URLs.
-- Verificado hoy: `npm run lint` (0 warnings) + `npm run build` OK. `frontend/node_modules` estaba vacío →
-  hubo que correr `npm install`.
-- README restaurado; el viejo mencionaba Kanban y Rocky Linux, que no existen en el código.
-- Publicado en `origin/main` (`9a7c906..8cad3d8`): 7 commits (docs, artefactos, feat WIP, .gitattributes, README, refactor URLs).
+- Fase 1 (P0 de seguridad) implementada y verificada; **pendiente de commit**. Push previo: `origin/main` en `e51bec6`.
+- P0 aplicados:
+  1. `POST /users/` libre solo con tabla vacía (bootstrap del 1er usuario); después exige token admin.
+  2. `PATCH /tickets/{id}`: el empleado solo modifica sus propios tickets.
+  3. `GET /tickets/{id}/messages`: pertenencia obligatoria; el endpoint duplicado muerto se eliminó.
+  4. `SECRET_KEY` obligatoria (`RuntimeError` sin ella) — compose la inyecta vía `env_file: ./backend/.env`.
+  5. Upload: 5 MB en chunks (basura se borra), extensión derivada del content-type validado;
+     `old_password` verificado al cambiar la propia contraseña (admin resetea la de otros sin ella).
+  6. WebSockets con JWT en `Sec-WebSocket-Protocol: "auth", <token>` (antes `?token=`, ahora 403).
+- Verificado con la pila Docker viva: handshakes WS 101/403, pertenencia REST 200/403/401, upload
+  413/400/200, fail-fast de SECRET_KEY, `npm run lint` (0 warnings) y `npm run build` OK.
+- Sin dependencias ni archivos nuevos en Fase 1 (solo edición de archivos existentes).
 
 ## Decisiones (y por qué)
 
-- URL del API unificada en `frontend/src/api.js`: `API_URL` (de `VITE_API_URL`, fallback `http://localhost:8000`),
-  cliente `api` (axios con interceptor que adjunta el JWT) y `wsUrl()` para WebSockets. `frontend/.env.example` agregado.
-- El backend devuelve rutas relativas (`/static/...`): el host lo decide el frontend, nunca el servidor.
-- `.gitattributes` con `* text=auto`: `core.autocrlf=true` generaba 16 "M" fantasma por fin de línea.
-- `.gitignore` poblando; des-trackeados `node_modules`, `__pycache__`, `uploads` y `.env` (antes ~6800 archivos en git).
-- Backend plano en un solo `main.py`; esquema por `create_all` (Alembic en requirements pero sin configurar);
-  login form-encoded por `OAuth2PasswordRequestForm`; español en UI y commits.
+- Registro en bootstrap abierto a propósito: sin él no se podría crear el primer admin.
+- `old_password: Optional` en schema: obligatorio solo al cambiar la propia contraseña; el endpoint es
+  solo-admin y quien resetea la contraseña de otra persona no la conoce.
+- Fase 2/3 (P1/P2) intactas: sesión WS bloqueando el event loop, bug multi-tab de notificaciones,
+  Alembic sin configurar, tests, paginación, requisitos sin pinar.
 
 ## Aprendizajes y errores a evitar
 
-- Nunca `git add -A`; stagear rutas explícitas (y commitear el WIP del usuario antes que el trabajo propio).
+- Nunca `git add -A`; stagear rutas explícitas (commitear el WIP del usuario antes que el trabajo propio).
 - Cambios en modelos no migran tablas existentes: `docker compose down -v` (borra datos) o SQL manual.
 - Notas privadas se filtran en dos sitios (query REST y `ConnectionManager.broadcast`): actualizar ambos.
-- `GET /tickets/{id}/messages` está duplicado en `main.py`: editar el primero (~línea 208).
 - Fuera de Docker, `DATABASE_URL` debe apuntar a `localhost` (`.env` apunta al hostname `db`).
+- FastAPI valida el body antes de ejecutar la ruta: para probar `POST /users/` hace falta `name` (no `full_name`).
 - `/upload-image/` existe en el backend pero ningún componente del frontend lo usa ni renderiza imágenes.
 
 ## Próximos pasos
 
-- Configurar Alembic para migraciones reales de `models.py`.
-- Decidir el destino de la feature de imágenes (usar `api.js` + `API_URL` o retirarla).
+- Commitear la Fase 1 (push solo si lo pide el usuario); después, Fase 2 (P1).

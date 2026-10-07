@@ -13,7 +13,6 @@ import schemas
 import security
 import json
 import os
-import shutil
 import uuid
 import asyncio
 
@@ -36,8 +35,29 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Montamos la carpeta para que las imágenes sean accesibles vía URL
 app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
+# Límite de tamaño y formatos permitidos. La extensión se deriva del content-type
+# validado (nunca del filename) para que no se sirva HTML/JS desde /static.
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}
+
 # Configuración de OAuth2 para que Swagger entienda dónde pedir el token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+# Variante opcional: sin cabecera Authorization devuelve None en vez de fallar con 401
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
+
+
+def get_optional_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)):
+    """Como get_current_user, pero devuelve None si no hay token o si no es válido."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+    except JWTError:
+        return None
+    return db.query(models.User).filter(models.User.id == int(user_id)).first()
 
 # --- ENDPOINTS DE AUTENTICACIÓN ---
 @app.post("/login")
@@ -60,7 +80,23 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 # --- ENDPOINTS DE USUARIOS ---
 @app.post("/users/", response_model=schemas.UserResponse)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    user: schemas.UserCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_optional_user)
+):
+    # REGLA DE SEGURIDAD: el registro público solo sirve para crear el PRIMER usuario.
+    # A partir de ahí, crear usuarios (y elegir su rol) requiere token de administrador.
+    if db.query(models.User).count() > 0:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Autenticación requerida",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if current_user.role != models.RoleEnum.admin:
+            raise HTTPException(status_code=403, detail="Solo los administradores pueden crear usuarios")
+
     # Verificamos si el correo ya existe
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
@@ -159,7 +195,13 @@ def update_user_password(
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    
+
+    # REGLA DE SEGURIDAD: si cambias TU contraseña tienes que demostrar la actual.
+    # Un administrador reseteando la de otra persona no la conoce, por eso no aplica.
+    if user_id == current_user.id:
+        if not password_update.old_password or not security.verify_password(password_update.old_password, user.password_hash):
+            raise HTTPException(status_code=400, detail="La contraseña actual no es correcta")
+
     # Encriptamos la nueva contraseña antes de guardarla
     hashed_password = security.get_password_hash(password_update.new_password)
     user.password_hash = hashed_password
@@ -211,6 +253,13 @@ def get_ticket_messages(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    # REGLA DE SEGURIDAD: el empleado solo puede leer mensajes de SUS tickets
+    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    if current_user.role == models.RoleEnum.employee and ticket.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos sobre este ticket")
+
     # Buscamos los mensajes
     query = db.query(models.Message).filter(models.Message.ticket_id == ticket_id)
     
@@ -232,6 +281,10 @@ def update_ticket(
     db_ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
     if not db_ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
+
+    # REGLA DE SEGURIDAD: un empleado solo puede modificar sus propios tickets
+    if current_user.role == models.RoleEnum.employee and db_ticket.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar este ticket")
 
     # 2. Si un técnico toma un ticket, la asignación se determina desde el usuario autenticado.
     previous_assignee_id = db_ticket.assigned_to
@@ -321,20 +374,28 @@ async def upload_image(
     file: UploadFile = File(...), 
     current_user: models.User = Depends(get_current_user)
 ):
-    # Validamos que sea una imagen
-    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-    if file.content_type not in allowed_types:
+    # Validamos que sea una imagen (content-type real declarado por el cliente)
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail="Formato de archivo no permitido")
-    
-    # Generamos un nombre único (ej: 123e4567-e89b-12d3...png)
-    file_extension = file.filename.split(".")[-1]
-    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+
+    # Generamos un nombre único con la extensión derivada del content-type validado
+    unique_filename = f"{uuid.uuid4()}.{ALLOWED_IMAGE_TYPES[file.content_type]}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    
-    # Guardamos el archivo en disco
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
+
+    # Guardamos en disco por chunks, cortando si supera el límite (basura = se borra)
+    try:
+        total = 0
+        with open(file_path, "wb") as buffer:
+            while chunk := await file.read(1024 * 1024):
+                total += len(chunk)
+                if total > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="La imagen supera el límite de 5 MB")
+                buffer.write(chunk)
+    except Exception:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+
     # Devolvemos la ruta relativa; el frontend la resuelve con API_URL (src/api.js)
     image_url = f"/static/{unique_filename}"
     return {"image_url": image_url}
@@ -349,8 +410,8 @@ class ConnectionManager:
         # Guardaremos diccionarios: {"ws": websocket, "role": role}
         self.active_connections: dict[int, list[dict]] = {}
 
-    async def connect(self, websocket: WebSocket, ticket_id: int, role: str):
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, ticket_id: int, role: str, subprotocol: str = None):
+        await websocket.accept(subprotocol=subprotocol)
         if ticket_id not in self.active_connections:
             self.active_connections[ticket_id] = []
         self.active_connections[ticket_id].append({"ws": websocket, "role": role})
@@ -371,29 +432,29 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# --- ENDPOINTS DE MENSAJERÍA ---
+# --- MENSAJERÍA: CANAL DE CHAT EN VIVO (WebSocket) ---
 
-# 1. Obtener historial del chat (REST normal)
-@app.get("/tickets/{ticket_id}/messages", response_model=list[schemas.MessageResponse])
-def get_messages(ticket_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    query = db.query(models.Message).filter(models.Message.ticket_id == ticket_id)
-    
-    # REGLA DE NEGOCIO: Los empleados no pueden ver las notas privadas de los técnicos
-    if current_user.role == models.RoleEnum.employee:
-        query = query.filter(models.Message.is_private_note == False)
-        
-    return query.order_by(models.Message.created_at.asc()).all()
+def _ws_subprotocol_token(websocket: WebSocket) -> tuple[str, str]:
+    """Lee Sec-WebSocket-Protocol esperando 'auth, <jwt>'.
 
-# 2. Canal de chat en vivo (WebSocket)
+    El token viaja como subprotocolo (no en la query string) para que no quede
+    registrado en logs de proxies o servidores. Devuelve (subprotocolo, token).
+    """
+    header = websocket.headers.get("sec-websocket-protocol", "")
+    parts = [p.strip() for p in header.split(",") if p.strip()]
+    if len(parts) == 2 and parts[0] == "auth":
+        return parts[0], parts[1]
+    return None, None
+
 
 @app.websocket("/ws/tickets/{ticket_id}/chat")
 async def chat_websocket(
     websocket: WebSocket, 
     ticket_id: int, 
-    token: str, 
     db: Session = Depends(get_db)
 ):
     from jose import jwt
+    subprotocol, token = _ws_subprotocol_token(websocket)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))
@@ -402,8 +463,15 @@ async def chat_websocket(
         print(f" [Chat] Error al decodificar token: {e}")
         await websocket.close(code=1008)
         return
-            
-    await manager.connect(websocket, ticket_id, user_role)
+
+    # REGLA DE SEGURIDAD: solo el dueño del ticket o técnicos/administradores entran al chat
+    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    if ticket is None or (ticket.created_by != user_id and user_role not in ("technician", "admin")):
+        print(f" [Chat] Acceso denegado al ticket #{ticket_id} para usuario {user_id}")
+        await websocket.close(code=1008)
+        return
+
+    await manager.connect(websocket, ticket_id, user_role, subprotocol)
     print(f" [Chat] Usuario {user_id} ({user_role}) conectado al ticket #{ticket_id}")
 
     try:
@@ -546,8 +614,8 @@ class NotificationManager:
     def __init__(self):
         self.active_connections: dict[int, dict] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: int, role: str):
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, user_id: int, role: str, subprotocol: str = None):
+        await websocket.accept(subprotocol=subprotocol)
         self.active_connections[user_id] = {"ws": websocket, "role": role}
 
     def disconnect(self, user_id: int):
@@ -574,8 +642,9 @@ notifier = NotificationManager()
 
 # --- ENDPOINT WEBSOCKET DE ALERTAS ---
 @app.websocket("/ws/notifications")
-async def global_notifications(websocket: WebSocket, token: str):
+async def global_notifications(websocket: WebSocket):
     from jose import jwt
+    subprotocol, token = _ws_subprotocol_token(websocket)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))
@@ -585,8 +654,8 @@ async def global_notifications(websocket: WebSocket, token: str):
         await websocket.close(code=1008) 
         return
 
-    # Pasamos el rol a la conexión
-    await notifier.connect(websocket, user_id, user_role)
+    # Pasamos el rol y el subprotocolo acordado al aceptar la conexión
+    await notifier.connect(websocket, user_id, user_role, subprotocol)
     print(f"✅ [Notificaciones] Usuario {user_id} ({user_role}) conectado.")
     
     try:

@@ -63,7 +63,7 @@ export default function TicketDetail() {
         const timeoutId = setTimeout(() => {
             if (!isMounted) return
 
-            ws.current = new WebSocket(wsUrl(`/ws/tickets/${id}/chat?token=${token}`))
+            ws.current = new WebSocket(wsUrl(`/ws/tickets/${id}/chat`), ['auth', token])
 
             ws.current.onmessage = (event) => {
                 const data = JSON.parse(event.data)

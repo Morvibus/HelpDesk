@@ -37,6 +37,9 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
   (`docker compose down -v`, destruye datos) o aplicar SQL manual.
 - Dentro del contenedor, el `DATABASE_URL` de compose (usuario `helpdesk_user`) tiene prioridad sobre
   `backend/.env` (usuario `postgres`); difieren a propósito.
+- `SECRET_KEY` es obligatoria: `security.py` lanza `RuntimeError` al importar si falta (ya no hay fallback).
+  Compose la inyecta con `env_file: ./backend/.env` (archivo local, no trackeado); sin ese archivo,
+  `docker compose up` falla al arrancar el backend.
 
 ## Rarezas de la API
 
@@ -46,14 +49,15 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 - `POST /login` es OAuth2 **form-encoded** (`application/x-www-form-urlencoded`, campo `username` = email),
   no JSON. El rol para la UI se lee del payload del JWT en el cliente.
 - Auth: Bearer JWT (`sub` = id de usuario, el claim `role` maneja los permisos). Los endpoints WebSocket
-  (`/ws/notifications`, `/ws/tickets/{id}/chat`) reciben el JWT como query param `?token=...`.
+  (`/ws/notifications`, `/ws/tickets/{id}/chat`) reciben el JWT en `Sec-WebSocket-Protocol: "auth", <token>`
+  y responden con subprotocolo `auth`; `?token=` en la query se rechaza (403).
 - CORS permite solo `http://localhost:5173`.
-- `GET /tickets/{id}/messages` está definido **dos veces** en `main.py` (~línea 208 y ~línea 377). FastAPI usa
-  el primer registro; el segundo es código muerto. Editar el primero.
 - `notifier` (el `NotificationManager`) está definido abajo al final de `main.py` pero lo usan endpoints
   anteriores. Funciona porque la resolución ocurre en tiempo de petición — no "arreglarlo" reordenando código.
 - Las imágenes subidas quedan en `backend/uploads/` y se sirven en `/static`; el backend devuelve rutas
   **relativas** (`/static/...`) — resolverlas con `API_URL` en el frontend.
+- Upload limitado a 5 MB (se corta por chunks) y tipos `image/jpeg|png|gif|webp`; la extensión se deriva
+  del content-type validado, nunca del filename.
 
 ## Reglas de negocio a preservar
 
@@ -61,6 +65,8 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 - Las notas privadas (`is_private_note`) se ocultan a los empleados en **ambos** lugares: la query REST de
   mensajes y `ConnectionManager.broadcast`. Cualquier nueva regla de visibilidad de mensajes debe aplicarse en ambos.
 - Solo los empleados crean tickets; técnicos/admins los toman vía `PATCH /tickets`.
+- `POST /users/` crea el primer usuario sin token **solo** si la tabla está vacía (bootstrap);
+  después exige token de administrador.
 - Reabrir solo dentro de las 72 h del cierre; `/metrics/` es solo para técnicos/admins.
 
 ## Higiene de Git
@@ -79,3 +85,10 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 - Mantenlo breve (máximo ~50 líneas): resume o elimina lo que ya no aporte.
 - Si algo se convierte en una regla permanente, propón moverlo a `AGENTS.md` en lugar de dejarlo en la memoria.
 - No guardes nunca datos sensibles (claves, tokens, datos personales).
+
+
+## Limites
+
+Siempre: actualizar `MEMORY.md` al terminar cada tarea.
+Pregunta antes: crear archivos nuevos, cambiar el formato de los datos guardados.
+Nunca: añadir dependencias, frameworks o un paso de build

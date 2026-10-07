@@ -33,7 +33,7 @@ export default function Layout({ children }) {
         const timeoutId = setTimeout(() => {
             if (!isMounted) return
 
-            ws = new WebSocket(wsUrl(`/ws/notifications?token=${token}`))
+            ws = new WebSocket(wsUrl('/ws/notifications'), ['auth', token])
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data)
