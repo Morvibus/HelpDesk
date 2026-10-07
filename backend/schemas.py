@@ -19,6 +19,11 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# para actualizar la contraseña del usuario
+class UserPasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
 # --- SCHEMAS DE TICKET ---
 class TicketCreate(BaseModel):
     title: str

@@ -90,7 +90,7 @@ export default function Layout({ children }) {
                     <div className="flex justify-between h-16">
 
                         <div className="flex">
-                            <div className="flex-shrink-0 flex items-center">
+                            <div className="shrink-0 flex items-center">
                                 <Ticket className="h-8 w-8 text-brand-primary dark:text-brand-light" />
                                 <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">HelpDesk IT</span>
                             </div>

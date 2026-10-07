@@ -82,7 +82,7 @@ export default function Dashboard() {
                 <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
             </div>
             <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{title}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px] mx-auto">{message}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-50 mx-auto">{message}</p>
         </div>
     )
 
@@ -123,11 +123,11 @@ export default function Dashboard() {
             <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 space-x-6">
                 <button onClick={() => setActiveTab('board')} className={`pb-3 text-sm font-semibold flex items-center transition-colors relative ${activeTab === 'board' ? 'text-brand-primary dark:text-brand-light' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
                     <LayoutGrid className="w-4 h-4 mr-2" /> Tablero Activo
-                    {activeTab === 'board' && <span className="absolute bottom-[-1px] left-0 w-full h-0.5 bg-brand-primary dark:bg-brand-light rounded-t-full"></span>}
+                    {activeTab === 'board' && <span className="absolute bottom-1px left-0 w-full h-0.5 bg-brand-primary dark:bg-brand-light rounded-t-full"></span>}
                 </button>
                 <button onClick={() => setActiveTab('history')} className={`pb-3 text-sm font-semibold flex items-center transition-colors relative ${activeTab === 'history' ? 'text-brand-primary dark:text-brand-light' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
                     <Archive className="w-4 h-4 mr-2" /> Historial de Cerrados
-                    {activeTab === 'history' && <span className="absolute bottom-[-1px] left-0 w-full h-0.5 bg-brand-primary dark:bg-brand-light rounded-t-full"></span>}
+                    {activeTab === 'history' && <span className="absolute bottom-1px left-0 w-full h-0.5 bg-brand-primary dark:bg-brand-light rounded-t-full"></span>}
                 </button>
             </div>
 
@@ -169,7 +169,7 @@ export default function Dashboard() {
                     </div>
                 </div>
             ) : (
-                <div className="bg-white dark:bg-gray-900 shadow-sm rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden min-h-[400px] flex flex-col">
+                <div className="bg-white dark:bg-gray-900 shadow-sm rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden min-h-100 flex flex-col">
                     {historyTickets.length === 0 ? (
                         <div className="flex flex-col items-center justify-center flex-1 py-16 px-4 text-center">
                             <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-full mb-4">

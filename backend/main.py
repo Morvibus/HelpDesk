@@ -131,6 +131,43 @@ def create_ticket(
     
     return new_ticket
 
+# mostrar todos los empleados, técnicos y administradores 
+
+@app.get("/users/", response_model=list[schemas.UserResponse])
+def get_users(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # REGLA DE NEGOCIO: Solo los administradores pueden ver la lista de usuarios
+    if current_user.role != models.RoleEnum.admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver la lista de usuarios")
+    
+    return db.query(models.User).all()
+
+# modificar password de un usuario (solo admin puede cambiar el password de otros usuarios)
+@app.patch("/users/{user_id}/password", response_model=schemas.UserResponse)
+def update_user_password(
+    user_id: int, 
+    password_update: schemas.UserPasswordUpdate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # REGLA DE NEGOCIO: Solo los administradores pueden cambiar la contraseña de otros usuarios
+    if current_user.role != models.RoleEnum.admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos para cambiar la contraseña de otros usuarios")
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Encriptamos la nueva contraseña antes de guardarla
+    hashed_password = security.get_password_hash(password_update.new_password)
+    user.password_hash = hashed_password
+    db.commit()
+    db.refresh(user)
+    
+    return user
+
 @app.get("/tickets/", response_model=list[schemas.TicketResponse])
 def get_tickets(
     db: Session = Depends(get_db),
@@ -139,16 +176,16 @@ def get_tickets(
     # REGLA DE NEGOCIO: Visibilidad según el rol
     if current_user.role == models.RoleEnum.employee:
         # El empleado solo ve los tickets que él creó
-        return db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id).all()
+        return db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id).order_by(models.Ticket.priority.desc(), models.Ticket.created_at.desc()).all()
         
     elif current_user.role == models.RoleEnum.technician:
         # El técnico ve los no asignados o los asignados a él
         return db.query(models.Ticket).filter(
             (models.Ticket.assigned_to == None) | (models.Ticket.assigned_to == current_user.id)
-        ).all()
+        ).order_by(models.Ticket.priority.desc(), models.Ticket.created_at.desc()).all()
         
     # Si es admin, ve todos
-    return db.query(models.Ticket).all()
+    return db.query(models.Ticket).order_by(models.Ticket.priority.desc(), models.Ticket.created_at.desc()).all()
 
 @app.get("/tickets/{ticket_id}", response_model=schemas.TicketResponse)
 def get_ticket(
@@ -196,17 +233,28 @@ def update_ticket(
     if not db_ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
-    # 2. Aplicamos la actualización y registramos el historial
-    if ticket_update.assigned_to is not None:
+    # 2. Si un técnico toma un ticket, la asignación se determina desde el usuario autenticado.
+    previous_assignee_id = db_ticket.assigned_to
+    assigned_to = ticket_update.assigned_to
+    if (
+        assigned_to is None
+        and ticket_update.status == models.StatusEnum.in_process
+        and db_ticket.assigned_to is None
+        and current_user.role != models.RoleEnum.employee
+    ):
+        assigned_to = current_user.id
+
+    # Aplicamos la asignación y registramos el historial
+    if assigned_to is not None:
         if current_user.role == models.RoleEnum.employee:
             raise HTTPException(status_code=403, detail="Los empleados no pueden asignarse tickets")
         
         history = models.TicketHistory(
             ticket_id=ticket_id, action=models.ActionEnum.status_change,
-            changed_by=current_user.id, old_value=str(db_ticket.assigned_to), new_value=str(ticket_update.assigned_to)
+            changed_by=current_user.id, old_value=str(db_ticket.assigned_to), new_value=str(assigned_to)
         )
         db.add(history)
-        db_ticket.assigned_to = ticket_update.assigned_to
+        db_ticket.assigned_to = assigned_to
         if db_ticket.status == models.StatusEnum.created:
             db_ticket.status = models.StatusEnum.assigned
 
@@ -226,11 +274,26 @@ def update_ticket(
     db.refresh(db_ticket)
     
     # 3. NOTIFICACIONES SEGURAS EN EL FONDO
+    assignment_changed = db_ticket.assigned_to != previous_assignee_id
+    if assignment_changed:
+        background_tasks.add_task(
+            notifier.notify_techs,
+            f"Ticket #{db_ticket.id} asignado",
+            "Un técnico tomó este ticket.",
+            "👤",
+            "refresh",
+            db_ticket.id,
+            current_user.id
+        )
+
     if current_user.id != db_ticket.created_by:
         mensaje = "Tu ticket ha sido actualizado."
         icono = "🔔"
         
-        if ticket_update.status is not None:
+        if assignment_changed:
+            mensaje = "Un técnico tomó tu ticket."
+            icono = "👤"
+        elif ticket_update.status is not None:
             mensaje = f"El estado cambió a: {db_ticket.status.value}"
             icono = "🔄"
             if db_ticket.status == models.StatusEnum.solved:
@@ -244,8 +307,11 @@ def update_ticket(
             f"Ticket #{db_ticket.id} Actualizado",
             mensaje,
             icono,
-            "refresh"
+            "refresh",
+            db_ticket.id
         )
+
+    
 
     return db_ticket
 
@@ -476,10 +542,8 @@ def reopen_ticket(
     return db_ticket
 
 # --- GESTOR DE NOTIFICACIONES GLOBALES ---
-# --- GESTOR DE NOTIFICACIONES GLOBALES (ACTUALIZADO) ---
 class NotificationManager:
     def __init__(self):
-        # Ahora guardamos el rol del usuario: { user_id : {"ws": websocket, "role": role} }
         self.active_connections: dict[int, dict] = {}
 
     async def connect(self, websocket: WebSocket, user_id: int, role: str):
@@ -530,5 +594,3 @@ async def global_notifications(websocket: WebSocket, token: str):
             await websocket.receive_text()
     except WebSocketDisconnect:
         notifier.disconnect(user_id)
-
-

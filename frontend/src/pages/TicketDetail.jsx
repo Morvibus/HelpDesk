@@ -14,6 +14,7 @@ export default function TicketDetail() {
     const token = useAuthStore(state => state.token)
     const role = useAuthStore(state => state.role)
     const removeUnreadTicket = useUIStore(state => state.removeUnreadTicket)
+    const refreshTrigger = useUIStore(state => state.refreshTrigger)
     const isTech = role !== 'employee'
 
     const payload = JSON.parse(atob(token.split('.')[1]))
@@ -52,10 +53,9 @@ export default function TicketDetail() {
 
     useEffect(() => {
         fetchTicketData()
-    }, [id, token])
+    }, [id, token, refreshTrigger])
 
     // 2. Conectar WebSocket
-    // 2. Conectar WebSocket (Corregido para React Strict Mode)
     useEffect(() => {
         let isMounted = true
 
@@ -96,7 +96,7 @@ export default function TicketDetail() {
 
         ws.current.send(JSON.stringify({
             content: newMessage,
-            is_private_note: isPrivateNote // Le mandamos al backend si es privada
+            is_private_note: isPrivateNote 
         }))
         setNewMessage('')
         setIsPrivateNote(false)
@@ -107,8 +107,13 @@ export default function TicketDetail() {
         setActionLoading(true)
         setActionError('')
         try {
+            const update = { status: newStatus }
+            if (newStatus === 'in_process' && ticket.assigned_to == null) {
+                update.assigned_to = myUserId
+            }
+
             await axios.patch(`http://localhost:8000/tickets/${id}`,
-                { status: newStatus },
+                update,
                 { headers: { Authorization: `Bearer ${token}` } }
             )
             await fetchTicketData() // Recargamos para ver los cambios
@@ -188,13 +193,13 @@ export default function TicketDetail() {
                                 <div className="space-y-3">
                                     <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Acciones del Técnico</h4>
 
-                                    {ticket.status === 'created' && (
+                                    {(ticket.status === 'created' || (ticket.status === 'in_process' && ticket.assigned_to == null)) && (
                                         <button onClick={() => handleStatusChange('in_process')} disabled={actionLoading} className="w-full flex justify-center items-center px-4 py-2 bg-brand-primary text-white hover:bg-brand-dark rounded-lg transition-colors text-sm font-medium">
-                                            <UserPlus className="w-4 h-4 mr-2" /> Tomar y Atender Ticket
+                                            <UserPlus className="w-4 h-4 mr-2" /> {ticket.status === 'created' ? 'Tomar y Atender Ticket' : 'Reclamar asignación'}
                                         </button>
                                     )}
 
-                                    {['assigned', 'in_process'].includes(ticket.status) && (
+                                    {(['assigned', 'in_process'].includes(ticket.status) && !(ticket.status === 'in_process' && ticket.assigned_to == null)) && (
                                         <button onClick={() => handleStatusChange('solved')} disabled={actionLoading} className="w-full flex justify-center items-center px-4 py-2 bg-brand-light text-white hover:bg-green-600 rounded-lg transition-colors text-sm font-medium">
                                             <CheckCircle2 className="w-4 h-4 mr-2" /> Marcar como Solucionado
                                         </button>
