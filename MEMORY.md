@@ -5,26 +5,29 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 
 ## Estado actual (2026-10-07)
 
-- Fase 1 (P0 de seguridad) implementada y verificada; **pendiente de commit**. Push previo: `origin/main` en `e51bec6`.
-- P0 aplicados:
-  1. `POST /users/` libre solo con tabla vacía (bootstrap del 1er usuario); después exige token admin.
-  2. `PATCH /tickets/{id}`: el empleado solo modifica sus propios tickets.
-  3. `GET /tickets/{id}/messages`: pertenencia obligatoria; el endpoint duplicado muerto se eliminó.
-  4. `SECRET_KEY` obligatoria (`RuntimeError` sin ella) — compose la inyecta vía `env_file: ./backend/.env`.
-  5. Upload: 5 MB en chunks (basura se borra), extensión derivada del content-type validado;
-     `old_password` verificado al cambiar la propia contraseña (admin resetea la de otros sin ella).
-  6. WebSockets con JWT en `Sec-WebSocket-Protocol: "auth", <token>` (antes `?token=`, ahora 403).
-- Verificado con la pila Docker viva: handshakes WS 101/403, pertenencia REST 200/403/401, upload
-  413/400/200, fail-fast de SECRET_KEY, `npm run lint` (0 warnings) y `npm run build` OK.
-- Sin dependencias ni archivos nuevos en Fase 1 (solo edición de archivos existentes).
+- Fase 1 (P0 seguridad) commiteada en `0571924`; Fase 2 (P1) commiteada en `d91ac83`.
+  Push pendiente: `origin/main` sigue en `e51bec6` (push solo cuando el usuario lo indique).
+- Fase 1 (P0): bootstrap de registro solo con tabla vacía; pertenencia en `PATCH /tickets/{id}`
+  y `GET /tickets/{id}/messages`; `SECRET_KEY` obligatoria; upload 5 MB + extensión del content-type;
+  WS autenticados por `Sec-WebSocket-Protocol: "auth", <token>` (con `?token=` → 403).
+- Fase 2 (P1):
+  1. `NotificationManager` multi-tab: lista de conexiones por usuario; cerrar una pestaña no apaga
+     la otra; envíos tolerantes a sockets muertos (también en `ConnectionManager.broadcast`).
+  2. Chat WS no bloquea el event loop: membership, guardado y recarga con `asyncio.to_thread`
+     (sesión usada secuencialmente, con `refresh` para evitar lazy-loads en el hilo principal).
+  3. Tests: 45 en verde en `backend/tests/` (auth, permisos, upload, websockets) sobre la base
+     `helpdesk_test`; corren con `docker compose run --rm backend python -m pytest`.
+  4. `requirements.txt` pineado a las versiones reales de la imagen + `pytest==9.1.1` + `httpx==0.28.1`.
+- Verificado: pytest 45/45 (EXIT=0), `npm run lint` 0 warnings, `npm run build` OK,
+  smoke en vivo con imagen nueva (`/docs` 200, WS 101/403/403).
 
 ## Decisiones (y por qué)
 
-- Registro en bootstrap abierto a propósito: sin él no se podría crear el primer admin.
-- `old_password: Optional` en schema: obligatorio solo al cambiar la propia contraseña; el endpoint es
-  solo-admin y quien resetea la contraseña de otra persona no la conoce.
-- Fase 2/3 (P1/P2) intactas: sesión WS bloqueando el event loop, bug multi-tab de notificaciones,
-  Alembic sin configurar, tests, paginación, requisitos sin pinar.
+- Tests en `helpdesk_test`: `conftest.py` la crea y redirige `DATABASE_URL` antes de importar la
+  app — jamás se toca `helpdesk_db`. `python -m pytest` (no `pytest`) para que `/app` esté en `sys.path`.
+- Registro en bootstrap abierto a propósito; `old_password` obligatorio solo al cambiar la propia.
+- httpx en vez de httpx2 (lo aprobó el usuario); starlette 1.7 avisa de deprecación — vigilar.
+- Fase 3 pendiente: Alembic (sin configurar) y paginación de listados.
 
 ## Aprendizajes y errores a evitar
 
@@ -33,8 +36,11 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - Notas privadas se filtran en dos sitios (query REST y `ConnectionManager.broadcast`): actualizar ambos.
 - Fuera de Docker, `DATABASE_URL` debe apuntar a `localhost` (`.env` apunta al hostname `db`).
 - FastAPI valida el body antes de ejecutar la ruta: para probar `POST /users/` hace falta `name` (no `full_name`).
+- `email-validator` rechaza dominios reservados (`.local`, `.test`...): en datos de prueba usar
+  dominios inventados como `@helpdesk-mock.com`.
 - `/upload-image/` existe en el backend pero ningún componente del frontend lo usa ni renderiza imágenes.
 
 ## Próximos pasos
 
-- Commitear la Fase 1 (push solo si lo pide el usuario); después, Fase 2 (P1).
+- Push a `origin` solo cuando el usuario lo indique (locales: `0571924`, `d91ac83` y docs).
+- Fase 3: configurar Alembic (pedir permiso: `alembic.ini` + carpeta `versions/`) y paginación de listados.
