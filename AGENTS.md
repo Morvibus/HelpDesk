@@ -1,7 +1,7 @@
 # AGENTS.md
 
 HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas por `docker-compose.yml`.
-**No hay README, CI, tests, typecheck ni otros archivos de instrucciones** — los comandos de abajo son todo lo que existe.
+**No hay CI, tests ni typecheck** — el `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que existe.
 
 ## Estructura
 
@@ -10,6 +10,7 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
   JWT/bcrypt: `security.py`, engine/session: `database.py`. Entrada de la app: `main:app`.
 - `frontend/` — React 19 + Vite + Tailwind v4 (JSX puro, sin TypeScript).
   Páginas en `src/pages`, componentes en `src/components`, stores zustand en `src/store` (`authStore`, `themeStore`, `uiStore`).
+  **Todas** las llamadas al API pasan por `src/api.js`.
 - Los roles son `employee | technician | admin` (`RoleEnum` en `models.py`). Los permisos se verifican
   **inline en cada endpoint** — cualquier endpoint nuevo necesita su propio chequeo explícito de rol.
 
@@ -39,8 +40,9 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 
 ## Rarezas de la API
 
-- El frontend **hardcodea** `http://localhost:8000` / `ws://localhost:8000` en cada llamada axios y WebSocket.
-  `VITE_API_URL` definido en `docker-compose.yml` no se lee en ningún lado — no depender de él.
+- Para llamar al API desde el frontend usar `frontend/src/api.js`: `api` (axios con `baseURL` e interceptor
+  JWT automático) y `wsUrl()` para WebSockets; la base sale de `VITE_API_URL` con fallback
+  `http://localhost:8000` (`frontend/.env.example`). **Nunca** URLs absolutas ni headers `Authorization` manuales.
 - `POST /login` es OAuth2 **form-encoded** (`application/x-www-form-urlencoded`, campo `username` = email),
   no JSON. El rol para la UI se lee del payload del JWT en el cliente.
 - Auth: Bearer JWT (`sub` = id de usuario, el claim `role` maneja los permisos). Los endpoints WebSocket
@@ -50,8 +52,8 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
   el primer registro; el segundo es código muerto. Editar el primero.
 - `notifier` (el `NotificationManager`) está definido abajo al final de `main.py` pero lo usan endpoints
   anteriores. Funciona porque la resolución ocurre en tiempo de petición — no "arreglarlo" reordenando código.
-- Las imágenes subidas quedan en `backend/uploads/` y se sirven en `/static`; la respuesta del upload hardcodea
-  `http://localhost:8000/static/...`.
+- Las imágenes subidas quedan en `backend/uploads/` y se sirven en `/static`; el backend devuelve rutas
+  **relativas** (`/static/...`) — resolverlas con `API_URL` en el frontend.
 
 ## Reglas de negocio a preservar
 
@@ -63,11 +65,11 @@ HelpDesk: aplicación de soporte de tickets. Dos apps + Postgres, orquestadas po
 
 ## Higiene de Git
 
-- `frontend/node_modules/` (~6800 archivos), `backend/__pycache__/`, `backend/.env` y `backend/uploads/`
-  están **trackeados**, y `.gitignore` está vacío. `git status` siempre es ruidoso — nunca `git add -A`;
-  stagear rutas explícitas.
-- El working tree suele traer cambios sin commitear del usuario (ahora en `frontend/`). No commitear ni
-  revertir sin que lo pidan.
+- `.gitignore` y `.gitattributes` (`* text=auto`) están activos: `node_modules`, `__pycache__`, `uploads` y
+  `.env` ya NO están trackeados (antes ocupaban ~6800 archivos del repo). No volver a agregarlos.
+- Aun así, stagear **rutas explícitas**; nunca `git add -A`.
+- El working tree puede traer cambios sin commitear del usuario: no commitearlos ni revertirlos sin confirmar.
+  Si hay que construir encima, commitear primero su WIP como commit propio (preguntar).
 - Los mensajes de commit se escriben en español.
 
 ## Memoria

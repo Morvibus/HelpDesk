@@ -5,32 +5,33 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 
 ## Estado actual (2026-10-07)
 
-- App de tickets: FastAPI (`backend/main.py`) + React/Vite (`frontend/`) + Postgres 15 vía `docker-compose.yml`.
-- Último commit: `9a7c906` "Actualizacion front end" (2026-09-30).
-- Cambios sin commitear en `frontend/*`; sin trackear: `.gitignore` (vacío), `AGENTS.md`, `MEMORY.md`. No tocar sin confirmar.
-- `README.md` fue eliminado (commits "Limpieza"); hoy `AGENTS.md` es la única guía.
-- Sin tests ni CI; verificación real: `npm run lint` + `npm run build`.
-- La sección "Memoria" de `AGENTS.md` (agregada este día) define el flujo de lectura/escritura de este archivo.
+- Working tree **limpio y todo commiteado**: `1cad933` docs → `236b351` artefactos → `e1e6ed5` feat (WIP del usuario)
+  → `2222285` .gitattributes → `41aaf4e` README → `2390378` refactor URLs.
+- Verificado hoy: `npm run lint` (0 warnings) + `npm run build` OK. `frontend/node_modules` estaba vacío →
+  hubo que correr `npm install`.
+- README restaurado; el viejo mencionaba Kanban y Rocky Linux, que no existen en el código.
+- Pendiente de push a origin (no se hace sin pedir).
 
 ## Decisiones (y por qué)
 
-- Backend plano en un solo `main.py` con imports planos: proyecto pequeño; separar en paquetes solo si crece.
-- Esquema por `create_all` y no Alembic: más rápido en desarrollo; Alembic quedó en `requirements.txt` sin configurar.
-- Login form-encoded (`username` = email): lo exige `OAuth2PasswordRequestForm` de FastAPI.
-- Frontend hardcodea `http://localhost:8000` en axios/WebSocket: así se construyó; `VITE_API_URL` de compose quedó sin usar.
-- Comentarios, UI y mensajes de commit en español.
+- URL del API unificada en `frontend/src/api.js`: `API_URL` (de `VITE_API_URL`, fallback `http://localhost:8000`),
+  cliente `api` (axios con interceptor que adjunta el JWT) y `wsUrl()` para WebSockets. `frontend/.env.example` agregado.
+- El backend devuelve rutas relativas (`/static/...`): el host lo decide el frontend, nunca el servidor.
+- `.gitattributes` con `* text=auto`: `core.autocrlf=true` generaba 16 "M" fantasma por fin de línea.
+- `.gitignore` poblando; des-trackeados `node_modules`, `__pycache__`, `uploads` y `.env` (antes ~6800 archivos en git).
+- Backend plano en un solo `main.py`; esquema por `create_all` (Alembic en requirements pero sin configurar);
+  login form-encoded por `OAuth2PasswordRequestForm`; español en UI y commits.
 
 ## Aprendizajes y errores a evitar
 
-- Nunca `git add -A`: ~6800 archivos de `node_modules` + `__pycache__` + `.env` + `uploads` están trackeados y `.gitignore` está vacío.
+- Nunca `git add -A`; stagear rutas explícitas (y commitear el WIP del usuario antes que el trabajo propio).
 - Cambios en modelos no migran tablas existentes: `docker compose down -v` (borra datos) o SQL manual.
 - Notas privadas se filtran en dos sitios (query REST y `ConnectionManager.broadcast`): actualizar ambos.
-- `GET /tickets/{id}/messages` está definido dos veces: editar la primera (~línea 208).
-- Fuera de Docker el backend necesita `DATABASE_URL` apuntando a `localhost`: `.env` apunta al hostname `db`.
-- El contenido previo de este archivo era de otro proyecto (tracker de sesiones) y se reemplazó.
+- `GET /tickets/{id}/messages` está duplicado en `main.py`: editar el primero (~línea 208).
+- Fuera de Docker, `DATABASE_URL` debe apuntar a `localhost` (`.env` apunta al hostname `db`).
+- `/upload-image/` existe en el backend pero ningún componente del frontend lo usa ni renderiza imágenes.
 
-## Próximos pasos (propuestos, no ejecutados)
+## Próximos pasos
 
-- Poblar `.gitignore` y decidir si se des-trackea `node_modules`/`__pycache__`/`uploads`.
-- Definir si vuelve el `README.md`.
-- Unificar la URL del API (`VITE_API_URL`) o eliminar la variable de compose.
+- Configurar Alembic para migraciones reales de `models.py`.
+- Decidir el destino de la feature de imágenes (usar `api.js` + `API_URL` o retirarla).
