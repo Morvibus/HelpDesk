@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api, wsUrl } from '../api'
+import { toast } from 'react-hot-toast'
 import Layout from '../components/Layout'
-import { useAuthStore } from '../store/authStore'
+import { useAuthStore, decodeToken } from '../store/authStore'
 import { ArrowLeft, MessageSquare, Clock, AlertCircle, Send, RefreshCw, CheckCircle2, Lock, UserPlus } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 
@@ -17,7 +18,7 @@ export default function TicketDetail() {
     const refreshTrigger = useUIStore(state => state.refreshTrigger)
     const isTech = role !== 'employee'
 
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const payload = decodeToken(token) || {}
     const myUserId = parseInt(payload.sub)
 
     const [ticket, setTicket] = useState(null)
@@ -29,6 +30,7 @@ export default function TicketDetail() {
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState(false)
     const [actionError, setActionError] = useState('')
+    const [wsAbierto, setWsAbierto] = useState(false)
 
     const ws = useRef(null)
     const messagesEndRef = useRef(null)
@@ -40,12 +42,13 @@ export default function TicketDetail() {
         removeUnreadTicket(Number(id))
     }, [id, removeUnreadTicket])
 
-    // 1. Cargar Datos
-    const fetchTicketData = async () => {
+    // 1. Cargar Datos (signal: cancela si cambia el ticket o se desmonta)
+    const fetchTicketData = async (signal) => {
         try {
+            const opciones = signal ? { signal } : undefined
             const [ticketRes, messagesRes] = await Promise.all([
-                api.get(`/tickets/${id}`),
-                api.get(`/tickets/${id}/messages?limit=200`)
+                api.get(`/tickets/${id}`, opciones),
+                api.get(`/tickets/${id}/messages?limit=200`, opciones)
             ])
             setTicket(ticketRes.data)
             // El backend pagina y devuelve los más recientes primero:
@@ -53,6 +56,7 @@ export default function TicketDetail() {
             setMessages(messagesRes.data.items.slice().reverse())
             setMessagesTotal(messagesRes.data.total)
         } catch (error) {
+            if (error.code === 'ERR_CANCELED') return
             console.error("Error al cargar datos", error)
         } finally {
             setLoading(false)
@@ -79,18 +83,26 @@ export default function TicketDetail() {
     }
 
     useEffect(() => {
-        fetchTicketData()
+        const controller = new AbortController()
+        fetchTicketData(controller.signal)
+        return () => controller.abort()
     }, [id, token, refreshTrigger])
 
-    // 2. Conectar WebSocket
+    // 2. Conectar WebSocket (con reconexión por si el backend se cae)
     useEffect(() => {
         let isMounted = true
+        let reintentos = 0
+        let timerId = null
 
-        // Retrasamos la conexión medio segundo para evitar el doble render de React
-        const timeoutId = setTimeout(() => {
+        function conectar() {
             if (!isMounted) return
 
             ws.current = new WebSocket(wsUrl(`/ws/tickets/${id}/chat`), ['auth', token])
+
+            ws.current.onopen = () => {
+                reintentos = 0
+                setWsAbierto(true)
+            }
 
             ws.current.onmessage = (event) => {
                 const data = JSON.parse(event.data)
@@ -100,11 +112,24 @@ export default function TicketDetail() {
             ws.current.onerror = () => {
                 console.debug("Desconexión menor del WebSocket de chat.")
             }
-        }, 500)
+
+            // Caída del socket → reconectamos con backoff (máx 15 s)
+            ws.current.onclose = () => {
+                setWsAbierto(false)
+                if (!isMounted) return
+                reintentos += 1
+                const delay = Math.min(1000 * 2 ** reintentos, 15000)
+                timerId = setTimeout(conectar, delay)
+            }
+        }
+
+        // Margen inicial: StrictMode monta el efecto dos veces en dev y así no abrimos dos sockets
+        timerId = setTimeout(conectar, 500)
 
         return () => {
             isMounted = false
-            clearTimeout(timeoutId)
+            clearTimeout(timerId)
+            setWsAbierto(false)
             if (ws.current && (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)) {
                 ws.current.close()
             }
@@ -127,7 +152,13 @@ export default function TicketDetail() {
     // 4. Enviar Mensaje (ahora con soporte para nota privada)
     const handleSendMessage = (e) => {
         e.preventDefault()
-        if (!newMessage.trim() || !ws.current) return
+        if (!newMessage.trim()) return
+
+        // Sin socket abierto no enviamos: avisamos en vez de perder el mensaje
+        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+            toast.error('Sin conexión al chat: tu mensaje no se envió. Reintentando…')
+            return
+        }
 
         ws.current.send(JSON.stringify({
             content: newMessage,
@@ -179,6 +210,9 @@ export default function TicketDetail() {
     const statusLabels = {
         created: 'Nuevo', assigned: 'Asignado', in_process: 'En Proceso', solved: 'Solucionado', closed: 'Cerrado'
     }
+    const priorityLabels = {
+        low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente'
+    }
 
     return (
         <Layout>
@@ -206,7 +240,7 @@ export default function TicketDetail() {
 
                         <div className="space-y-3 text-sm">
                             <div className="flex items-center text-gray-500 dark:text-gray-400">
-                                <AlertCircle className="w-4 h-4 mr-2" /> <span className="font-medium mr-1">Prioridad:</span> {ticket.priority}
+                                <AlertCircle className="w-4 h-4 mr-2" /> <span className="font-medium mr-1">Prioridad:</span> {priorityLabels[ticket.priority] || ticket.priority}
                             </div>
                             <div className="flex items-center text-gray-500 dark:text-gray-400">
                                 <Clock className="w-4 h-4 mr-2" /> <span className="font-medium mr-1">Creado:</span>
@@ -326,9 +360,9 @@ export default function TicketDetail() {
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     disabled={isTicketClosed}
                                     className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:text-white transition-colors disabled:opacity-50"
-                                    placeholder={isTicketClosed ? 'Ticket cerrado.' : 'Escribe un mensaje...'}
+                                    placeholder={isTicketClosed ? 'Ticket cerrado.' : wsAbierto ? 'Escribe un mensaje...' : 'Conectando al chat...'}
                                 />
-                                <button type="submit" disabled={!newMessage.trim() || isTicketClosed} className="px-4 py-2 bg-brand-primary text-white rounded-lg disabled:opacity-50 hover:bg-brand-dark transition-colors">
+                                <button type="submit" disabled={!newMessage.trim() || isTicketClosed || !wsAbierto} title={wsAbierto ? 'Enviar mensaje' : 'Conectando al chat…'} className="px-4 py-2 bg-brand-primary text-white rounded-lg disabled:opacity-50 hover:bg-brand-dark transition-colors">
                                     <Send className="w-5 h-5" />
                                 </button>
                             </div>

@@ -29,11 +29,15 @@ export default function Layout({ children }) {
 
         let ws = null // Es una variable normal, no usamos .current aquí
         let isMounted = true
+        let reintentos = 0
+        let timerId = null
 
-        const timeoutId = setTimeout(() => {
+        const conectar = () => {
             if (!isMounted) return
 
             ws = new WebSocket(wsUrl('/ws/notifications'), ['auth', token])
+
+            ws.onopen = () => { reintentos = 0 }
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data)
@@ -69,12 +73,23 @@ export default function Layout({ children }) {
             ws.onerror = () => {
                 console.debug("Desconexión menor del WebSocket de notificaciones.")
             }
-        }, 500)
+
+            // Si el socket se cae (reinicio del backend, red...), reconectamos con backoff
+            ws.onclose = () => {
+                if (!isMounted) return
+                reintentos += 1
+                const delay = Math.min(1000 * 2 ** reintentos, 15000)
+                timerId = setTimeout(conectar, delay)
+            }
+        }
+
+        // Margen inicial: StrictMode monta el efecto dos veces en dev y así no abrimos dos sockets
+        timerId = setTimeout(conectar, 500)
 
         // Función de limpieza
         return () => {
             isMounted = false
-            clearTimeout(timeoutId)
+            clearTimeout(timerId)
             if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
                 ws.close()
             }
@@ -113,6 +128,7 @@ export default function Layout({ children }) {
                                 {/* Botón Modo Oscuro */}
                                 <button
                                     onClick={toggleTheme}
+                                    aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
                                     className="p-2 text-gray-400 hover:text-brand-accent dark:hover:text-brand-light transition-colors"
                                 >
                                     {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -130,6 +146,7 @@ export default function Layout({ children }) {
                                 {/* Botón Salir */}
                                 <button
                                     onClick={handleLogout}
+                                    aria-label="Cerrar sesión"
                                     className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                                     title="Cerrar Sesión"
                                 >

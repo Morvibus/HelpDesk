@@ -61,8 +61,9 @@ export default function NewTicketModal() {
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asunto del problema</label>
+                        <label htmlFor="ticket-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asunto del problema</label>
                         <input
+                            id="ticket-title"
                             type="text"
                             required
                             value={title}
@@ -73,8 +74,9 @@ export default function NewTicketModal() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nivel de Prioridad</label>
+                        <label htmlFor="ticket-priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nivel de Prioridad</label>
                         <select
+                            id="ticket-priority"
                             value={priority}
                             onChange={(e) => setPriority(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
@@ -86,8 +88,9 @@ export default function NewTicketModal() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción detallada</label>
+                        <label htmlFor="ticket-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción detallada</label>
                         <textarea
+                            id="ticket-description"
                             required
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}

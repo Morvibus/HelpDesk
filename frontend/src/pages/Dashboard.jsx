@@ -21,18 +21,24 @@ export default function Dashboard() {
     const isTech = role !== 'employee'
 
     useEffect(() => {
+        // Cancela la carga si cambia el refresh o el componente se desmonta:
+        // evita que una respuesta tardía pise datos más recientes.
+        const controller = new AbortController()
+
         const fetchTickets = async () => {
             try {
-                const response = await api.get('/tickets/')
+                const response = await api.get('/tickets/', { signal: controller.signal })
                 setTickets(response.data.items)
                 setTotalTickets(response.data.total)
             } catch (error) {
+                if (error.code === 'ERR_CANCELED') return
                 console.error("Error al cargar tickets:", error)
             } finally {
                 setLoading(false)
             }
         }
         fetchTickets()
+        return () => controller.abort()
     }, [token, refreshTrigger])
 
     // Carga la siguiente página y la añade a la lista
@@ -59,9 +65,9 @@ export default function Dashboard() {
     const historyTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status))
 
     const getPriorityBadge = (priority) => {
-        const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30' }
-        const labels = { low: 'Baja', medium: 'Media', high: 'Alta' }
-        return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${styles[priority]}`}>{labels[priority]}</span>
+        const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30', urgent: 'text-white bg-red-600 dark:bg-red-700' }
+        const labels = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' }
+        return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${styles[priority] || ''}`}>{labels[priority] || priority}</span>
     }
 
     const getStatusBadge = (status) => {

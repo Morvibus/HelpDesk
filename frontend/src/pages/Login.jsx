@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { api } from '../api'
-import { useAuthStore } from '../store/authStore'
+import { useAuthStore, decodeToken, isTokenExpired } from '../store/authStore'
 import { KeyRound, Mail } from 'lucide-react'
 
 export default function Login() {
@@ -11,7 +11,11 @@ export default function Login() {
     const [loading, setLoading] = useState(false)
 
     const login = useAuthStore(state => state.login)
+    const token = useAuthStore(state => state.token)
     const navigate = useNavigate()
+
+    // Si ya hay una sesión válida, directo al panel
+    if (token && !isTokenExpired(token)) return <Navigate to="/" replace />
 
     const handleLogin = async (e) => {
         e.preventDefault()
@@ -27,19 +31,28 @@ export default function Login() {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             })
 
-            const token = response.data.access_token
+            const tokenRecibido = response.data.access_token
+            const payload = decodeToken(tokenRecibido)
 
-            const payload = JSON.parse(atob(token.split('.')[1]))
-            const role = payload.role
+            if (!payload?.role) {
+                setError('Respuesta inválida del servidor. Intenta de nuevo.')
+                return
+            }
 
             // Guardamos token, rol y el correo que el usuario escribió en el input
-            login(token, role, email)
+            login(tokenRecibido, payload.role, email)
             navigate('/')
 
         } catch (err) {
-            // ---> ESTO NOS DIRÁ EL ERROR REAL EN LA CONSOLA <---
             console.error("Detalle del error de login:", err.response?.data || err.message)
-            setError('Correo o contraseña incorrectos')
+            // Distinguir credenciales inválidas de problemas de red/servidor
+            if (!err.response) {
+                setError('No se pudo conectar con el servidor. Revisa tu conexión.')
+            } else if (err.response.status === 401 || err.response.status === 400) {
+                setError('Correo o contraseña incorrectos')
+            } else {
+                setError('Error del servidor. Intenta de nuevo en unos segundos.')
+            }
         } finally {
             setLoading(false)
         }
@@ -67,12 +80,13 @@ export default function Login() {
                         )}
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+                            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
                             <div className="mt-1 relative rounded-md shadow-sm">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Mail className="h-5 w-5 text-gray-400" />
                                 </div>
                                 <input
+                                    id="login-email"
                                     type="email"
                                     required
                                     value={email}
@@ -84,12 +98,13 @@ export default function Login() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Contraseña</label>
+                            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">Contraseña</label>
                             <div className="mt-1 relative rounded-md shadow-sm">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <KeyRound className="h-5 w-5 text-gray-400" />
                                 </div>
                                 <input
+                                    id="login-password"
                                     type="password"
                                     required
                                     value={password}

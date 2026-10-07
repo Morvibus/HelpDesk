@@ -13,5 +13,19 @@ api.interceptors.request.use((config) => {
     return config
 })
 
+// 401 = token vencido/inválido: cerrar sesión y volver al login.
+// Se excluye /login para no pisar el error de credenciales que maneja la página.
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const enLogin = error.config?.url?.includes('/login')
+        if (error.response?.status === 401 && !enLogin && window.location.pathname !== '/login') {
+            useAuthStore.getState().logout()
+            window.location.replace('/login')
+        }
+        return Promise.reject(error)
+    }
+)
+
 // URL para WebSockets: convierte http(s):// en ws(s)://
 export const wsUrl = (path) => `${API_URL.replace(/^http/, 'ws')}${path}`
