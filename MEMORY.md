@@ -10,7 +10,7 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - Verificado hoy: `npm run lint` (0 warnings) + `npm run build` OK. `frontend/node_modules` estaba vacío →
   hubo que correr `npm install`.
 - README restaurado; el viejo mencionaba Kanban y Rocky Linux, que no existen en el código.
-- Pendiente de push a origin (no se hace sin pedir).
+- Publicado en `origin/main` (`9a7c906..8cad3d8`): 7 commits (docs, artefactos, feat WIP, .gitattributes, README, refactor URLs).
 
 ## Decisiones (y por qué)
 
