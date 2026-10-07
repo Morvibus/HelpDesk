@@ -1,0 +1,9 @@
+# Normaliza finales de línea: LF en el repositorio, sin ruido de "M" fantasma.
+* text=auto
+
+# Binarios
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.gif binary
+*.webp binary
