@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Variables de entorno (secretos) — nunca trackear
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Subidas de usuarios (datos de ejecución)
+uploads/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
