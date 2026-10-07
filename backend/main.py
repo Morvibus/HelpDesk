@@ -335,8 +335,8 @@ async def upload_image(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Devolvemos la ruta pública. (Usa la variable de entorno VITE_API_URL en React para formar la URL completa)
-    image_url = f"http://localhost:8000/static/{unique_filename}"
+    # Devolvemos la ruta relativa; el frontend la resuelve con API_URL (src/api.js)
+    image_url = f"/static/{unique_filename}"
     return {"image_url": image_url}
 
 

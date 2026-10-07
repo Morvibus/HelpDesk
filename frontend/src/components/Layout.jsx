@@ -7,6 +7,7 @@ import NewTicketModal from './NewTicketModal'
 import { useEffect } from 'react'
 import { Toaster, toast } from 'react-hot-toast'
 import Avatar from 'boring-avatars'
+import { wsUrl } from '../api'
 
 export default function Layout({ children }) {
     const logout = useAuthStore(state => state.logout)
@@ -15,7 +16,6 @@ export default function Layout({ children }) {
     const navigate = useNavigate()
     const { openTicketModal } = useUIStore()
     const token = useAuthStore(state => state.token)
-    const { triggerRefresh } = useUIStore()
     const email = useAuthStore((state) => state.email)
 
 
@@ -33,7 +33,7 @@ export default function Layout({ children }) {
         const timeoutId = setTimeout(() => {
             if (!isMounted) return
 
-            ws = new WebSocket(`ws://localhost:8000/ws/notifications?token=${token}`)
+            ws = new WebSocket(wsUrl(`/ws/notifications?token=${token}`))
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data)

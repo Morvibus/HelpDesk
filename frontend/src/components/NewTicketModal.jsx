@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import axios from 'axios'
+import { api } from '../api'
 import { X, Loader2 } from 'lucide-react'
-import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'
 
 export default function NewTicketModal() {
     const { isTicketModalOpen, closeTicketModal, triggerRefresh } = useUIStore()
-    const token = useAuthStore((state) => state.token)
 
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
@@ -23,11 +21,7 @@ export default function NewTicketModal() {
         setError('')
 
         try {
-            await axios.post(
-                'http://localhost:8000/tickets/',
-                { title, description, priority },
-                { headers: { Authorization: `Bearer ${token}` } }
-            )
+            await api.post('/tickets/', { title, description, priority })
 
             // Si tiene éxito: limpiamos el formulario, cerramos el modal y recargamos la tabla
             setTitle('')
@@ -36,7 +30,7 @@ export default function NewTicketModal() {
             triggerRefresh()
             closeTicketModal()
 
-        } catch (err) {
+        } catch {
             setError('Hubo un error al crear el ticket. Intenta de nuevo.')
         } finally {
             setLoading(false)

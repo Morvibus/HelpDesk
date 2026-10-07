@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import { api } from '../api'
 import { useAuthStore } from '../store/authStore'
 import { KeyRound, Mail } from 'lucide-react'
 
@@ -23,7 +23,7 @@ export default function Login() {
             formData.append('username', email)
             formData.append('password', password)
 
-            const response = await axios.post('http://localhost:8000/login', formData, {
+            const response = await api.post('/login', formData, {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             })
 

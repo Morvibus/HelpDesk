@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import { api, wsUrl } from '../api'
 import Layout from '../components/Layout'
 import { useAuthStore } from '../store/authStore'
 import { ArrowLeft, MessageSquare, Clock, AlertCircle, Send, RefreshCw, CheckCircle2, Lock, UserPlus } from 'lucide-react'
@@ -39,8 +39,8 @@ export default function TicketDetail() {
     const fetchTicketData = async () => {
         try {
             const [ticketRes, messagesRes] = await Promise.all([
-                axios.get(`http://localhost:8000/tickets/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`http://localhost:8000/tickets/${id}/messages`, { headers: { Authorization: `Bearer ${token}` } })
+                api.get(`/tickets/${id}`),
+                api.get(`/tickets/${id}/messages`)
             ])
             setTicket(ticketRes.data)
             setMessages(messagesRes.data)
@@ -63,7 +63,7 @@ export default function TicketDetail() {
         const timeoutId = setTimeout(() => {
             if (!isMounted) return
 
-            ws.current = new WebSocket(`ws://localhost:8000/ws/tickets/${id}/chat?token=${token}`)
+            ws.current = new WebSocket(wsUrl(`/ws/tickets/${id}/chat?token=${token}`))
 
             ws.current.onmessage = (event) => {
                 const data = JSON.parse(event.data)
@@ -112,12 +112,9 @@ export default function TicketDetail() {
                 update.assigned_to = myUserId
             }
 
-            await axios.patch(`http://localhost:8000/tickets/${id}`,
-                update,
-                { headers: { Authorization: `Bearer ${token}` } }
-            )
+            await api.patch(`/tickets/${id}`, update)
             await fetchTicketData() // Recargamos para ver los cambios
-        } catch (err) {
+        } catch {
             setActionError('Error al actualizar el estado del ticket')
         } finally {
             setActionLoading(false)
@@ -129,9 +126,7 @@ export default function TicketDetail() {
         setActionLoading(true)
         setActionError('')
         try {
-            await axios.post(`http://localhost:8000/tickets/${id}/reopen`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            })
+            await api.post(`/tickets/${id}/reopen`, {})
             await fetchTicketData()
         } catch (err) {
             setActionError(err.response?.data?.detail || 'Error al reabrir el ticket')

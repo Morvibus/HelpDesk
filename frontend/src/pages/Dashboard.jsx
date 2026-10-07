@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import { api } from '../api'
 import Layout from '../components/Layout'
 import { useAuthStore } from '../store/authStore'
 import { AlertCircle, Clock, CheckCircle2, Inbox, Briefcase, LayoutGrid, Archive, MessageSquare, Coffee, Sparkles, FolderOpen } from 'lucide-react'
@@ -21,9 +21,7 @@ export default function Dashboard() {
     useEffect(() => {
         const fetchTickets = async () => {
             try {
-                const response = await axios.get('http://localhost:8000/tickets/', {
-                    headers: { Authorization: `Bearer ${token}` }
-                })
+                const response = await api.get('/tickets/')
                 setTickets(response.data)
             } catch (error) {
                 console.error("Error al cargar tickets:", error)
