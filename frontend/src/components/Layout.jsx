@@ -1,7 +1,7 @@
 import { LogOut, Ticket, PlusCircle, Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, NavLink } from 'react-router-dom'
 import { useUIStore } from '../store/uiStore'
 import NewTicketModal from './NewTicketModal'
 import { useEffect } from 'react'
@@ -110,9 +110,14 @@ export default function Layout({ children }) {
                                 <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">HelpDesk IT</span>
                             </div>
                             <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
-                                <span className="border-brand-primary dark:border-brand-light text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <NavLink to="/" end className={({ isActive }) => `${isActive ? 'border-brand-primary dark:border-brand-light text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}>
                                     Mis Tickets
-                                </span>
+                                </NavLink>
+                                {role === 'admin' && (
+                                    <NavLink to="/admin" className={({ isActive }) => `${isActive ? 'border-brand-primary dark:border-brand-light text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}>
+                                        Admin
+                                    </NavLink>
+                                )}
                             </div>
                         </div>
 

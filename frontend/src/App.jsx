@@ -4,6 +4,7 @@ import { useAuthStore, isTokenExpired } from './store/authStore'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import TicketDetail from './pages/TicketDetail'
+import AdminPanel from './pages/AdminPanel'
 
 const ProtectedRoute = ({ children }) => {
   const token = useAuthStore(state => state.token)
@@ -15,6 +16,21 @@ const ProtectedRoute = ({ children }) => {
   }, [token, logout])
 
   if (!token || isTokenExpired(token)) return <Navigate to="/login" replace />
+  return children
+}
+
+// Solo administradores: los demás roles vuelven al panel
+const AdminRoute = ({ children }) => {
+  const token = useAuthStore(state => state.token)
+  const role = useAuthStore(state => state.role)
+  const logout = useAuthStore(state => state.logout)
+
+  useEffect(() => {
+    if (token && isTokenExpired(token)) logout()
+  }, [token, logout])
+
+  if (!token || isTokenExpired(token)) return <Navigate to="/login" replace />
+  if (role !== 'admin') return <Navigate to="/" replace />
   return children
 }
 
@@ -61,6 +77,11 @@ export default function App() {
             <ProtectedRoute>
               <TicketDetail />
             </ProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <AdminRoute>
+              <AdminPanel />
+            </AdminRoute>
           } />
         </Routes>
       </BrowserRouter>
