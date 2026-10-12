@@ -17,10 +17,16 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   y `ColumnEmptyState` en scope de módulo.
 - **Responsive R1+R2 (esta sesión)**: navbar ya no desborda en móvil y el chat tiene altura
   adaptable. Verificado: lint 0 + build OK.
+- **Asignaciones**: el tablero pasó a 2 columnas (Nuevos + En Proceso). La columna "Asignados"
+  estaba muerta: ningún flujo produce tickets `assigned` (tomar ya va directo a `in_process` vía
+  "Tomar y Atender Ticket"). Tickets legacy `assigned` se muestran dentro de En Proceso (sin
+  migrar datos). Verificado: lint 0 + build OK.
 
 ## Decisiones (y por qué)
 
 - KPIs del Dashboard: única fuente de verdad = `/metrics/`, nunca contar sobre la página cargada.
+- "En Proceso" (columna y KPI) incluye `assigned` legacy para no perder tickets viejos de vista;
+  no se migran datos (nada de UPDATE en Alembic mientras el backend siga aceptando `assigned`).
 - Header móvil: identidad = Avatar; email solo ≥`md` (truncado 180px), rol solo ≥`sm`; botón
   "Nuevo Ticket" icon-only <`sm` con `aria-label` (sin perder accesibilidad); espaciados compactos
   (`space-x-1 sm:space-x-4`).
@@ -44,8 +50,11 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - Componentes que no dependan de props/estado del padre → scope de módulo (remounts, oxlint).
 - "Pantalla en blanco" tras editar frontend suele ser HMR viejo en la pestaña: Ctrl+Shift+R
   primero; solo si persiste, `docker compose restart frontend`.
+- El watcher de Vite en bind mounts de Windows puede no detectar un cambio y servir el módulo
+  viejo (incluso con `?t=`): verificar con `docker compose exec frontend cat /app/...` y, si el
+  archivo está bien pero el servido no, `docker compose restart frontend`.
 
 ## Próximos pasos
 
 - Vigilar httpx → httpx2 cuando Starlette quite el soporte a httpx en testclient.
-- Push de los commits de responsive cuando el usuario lo indique.
+- Push de los commits locales (responsive + asignaciones) cuando el usuario lo indique.
