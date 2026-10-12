@@ -21,10 +21,17 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   estaba muerta: ningún flujo produce tickets `assigned` (tomar ya va directo a `in_process` vía
   "Tomar y Atender Ticket"). Tickets legacy `assigned` se muestran dentro de En Proceso (sin
   migrar datos). Verificado: lint 0 + build OK.
+- **Vista de administrador (/admin)**: gestión completa de usuarios. Backend: `PATCH /users/{id}`
+  (rol y `is_active`, solo admin, anti-lockout propio), login y `get_current_user` rechazan
+  cuentas desactivadas. Frontend: `AdminPanel.jsx` (nuevo) + ruta `/admin` con `AdminRoute` y
+  link "Admin" en el header (solo admins). 61 tests en verde; lint 0 + build OK.
 
 ## Decisiones (y por qué)
 
 - KPIs del Dashboard: única fuente de verdad = `/metrics/`, nunca contar sobre la página cargada.
+- Gestión de usuarios: rol y activación vía `PATCH /users/{id}` (solo admin). Anti-lockout: un
+  admin no puede desactivarse ni quitarse el rol admin a sí mismo; desactivar bloquea login y
+  JWT al instante (`is_active` chequeado en login y `get_current_user`).
 - "En Proceso" (columna y KPI) incluye `assigned` legacy para no perder tickets viejos de vista;
   no se migran datos (nada de UPDATE en Alembic mientras el backend siga aceptando `assigned`).
 - Header móvil: identidad = Avatar; email solo ≥`md` (truncado 180px), rol solo ≥`sm`; botón
@@ -57,4 +64,4 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 ## Próximos pasos
 
 - Vigilar httpx → httpx2 cuando Starlette quite el soporte a httpx en testclient.
-- Push de los commits locales (responsive + asignaciones) cuando el usuario lo indique.
+- Push de los commits locales (responsive + asignaciones + vista admin) cuando el usuario lo indique.
