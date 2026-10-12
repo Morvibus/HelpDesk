@@ -107,7 +107,7 @@ export default function Layout({ children }) {
                         <div className="flex">
                             <div className="shrink-0 flex items-center">
                                 <Ticket className="h-8 w-8 text-brand-primary dark:text-brand-light" />
-                                <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">HelpDesk IT</span>
+                                <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">HelpDesk IT</span>
                             </div>
                             <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
                                 <span className="border-brand-primary dark:border-brand-light text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
@@ -116,15 +116,19 @@ export default function Layout({ children }) {
                             </div>
                         </div>
 
-                        <div className="flex items-center space-x-4">
-                            {/* Botón Nuevo Ticket */}
-
-                            <button onClick={openTicketModal} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-dark dark:bg-brand-light dark:hover:bg-brand-primary dark:text-gray-900 transition-colors">
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Nuevo Ticket
+                        <div className="flex items-center space-x-1 sm:space-x-4">
+                            {/* Botón Nuevo Ticket (icono solo en móvil) */}
+                            <button
+                                onClick={openTicketModal}
+                                aria-label="Nuevo Ticket"
+                                title="Nuevo Ticket"
+                                className="inline-flex items-center px-2 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-dark dark:bg-brand-light dark:hover:bg-brand-primary dark:text-gray-900 transition-colors"
+                            >
+                                <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Nuevo Ticket</span>
                             </button>
 
-                            <div className="flex items-center space-x-2 border-l pl-4 border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center space-x-1 sm:space-x-2 border-l border-gray-200 dark:border-gray-700 pl-2 sm:pl-4">
                                 {/* Botón Modo Oscuro */}
                                 <button
                                     onClick={toggleTheme}
@@ -134,14 +138,14 @@ export default function Layout({ children }) {
                                     {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                                 </button>
 
-                                <div className="flex flex-col text-right ml-2 mr-2">
+                                {/* Rol (oculto en móvil para no desbordar el header) */}
+                                <div className="hidden sm:flex flex-col text-right ml-2 mr-2">
                                     <span className="text-xs text-brand-primary dark:text-brand-accent font-medium uppercase tracking-wider">{role}</span>
                                 </div>
 
                                 {/* Avatar */}
-
                                 <Avatar size={32} name={email || "usuario"} variant="beam" />
-                                <span>{email}</span>
+                                <span className="hidden md:block max-w-[180px] truncate">{email}</span>
 
                                 {/* Botón Salir */}
                                 <button

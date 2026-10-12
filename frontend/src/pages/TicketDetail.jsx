@@ -289,7 +289,7 @@ export default function TicketDetail() {
                 </div>
 
                 {/* COLUMNA DERECHA: Chat */}
-                <div className="w-full lg:w-2/3 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden h-[600px]">
+                <div className="w-full lg:w-2/3 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden h-[55vh] min-h-[400px] lg:h-[600px]">
 
                     <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center bg-gray-50/50 dark:bg-gray-800/50 justify-between">
                         <div className="flex items-center">
