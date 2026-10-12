@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import Layout from '../components/Layout'
 import { useAuthStore } from '../store/authStore'
-import { AlertCircle, Clock, CheckCircle2, Inbox, Briefcase, LayoutGrid, Archive, MessageSquare, Coffee, Sparkles, FolderOpen } from 'lucide-react'
+import { AlertCircle, Clock, CheckCircle2, Inbox, Briefcase, LayoutGrid, Archive, MessageSquare, Sparkles, FolderOpen } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 import { useNavigate } from 'react-router-dom'
 
@@ -114,8 +114,9 @@ export default function Dashboard() {
     const totalMetricas = metrics?.total_tickets ?? totalTickets
 
     const colCreated = tickets.filter(t => t.status === 'created')
-    const colAssigned = tickets.filter(t => t.status === 'assigned')
-    const colInProcess = tickets.filter(t => t.status === 'in_process')
+    // Los tickets viejos en 'assigned' (datos de sesiones anteriores) se muestran
+    // dentro de En Proceso: al tomar, un ticket nuevo ya va directo a in_process.
+    const colInProcess = tickets.filter(t => ['in_process', 'assigned'].includes(t.status))
     const historyTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status))
 
     const getStatusBadge = (status) => {
@@ -175,7 +176,7 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-500 dark:text-gray-400">Cargando tablero...</p>
                 </div>
             ) : activeTab === 'board' ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-gray-50/50 dark:bg-gray-900/30 rounded-2xl p-4 border border-dashed border-gray-200 dark:border-gray-800 flex flex-col h-full">
                         <div className="flex justify-between items-center mb-4 px-1">
                             <h3 className="font-semibold text-gray-700 dark:text-gray-300 flex items-center"><span className="w-2 h-2 rounded-full bg-blue-400 mr-2"></span> Nuevos</h3>
@@ -183,16 +184,6 @@ export default function Dashboard() {
                         </div>
                         <div className="space-y-3 flex-1">
                             {colCreated.length === 0 ? <ColumnEmptyState icon={Inbox} title="Bandeja limpia" message="No hay tickets nuevos esperando asignación." /> : colCreated.map(t => <TicketCard key={t.id} ticket={t} />)}
-                        </div>
-                    </div>
-
-                    <div className="bg-gray-50/50 dark:bg-gray-900/30 rounded-2xl p-4 border border-dashed border-gray-200 dark:border-gray-800 flex flex-col h-full">
-                        <div className="flex justify-between items-center mb-4 px-1">
-                            <h3 className="font-semibold text-gray-700 dark:text-gray-300 flex items-center"><span className="w-2 h-2 rounded-full bg-yellow-400 mr-2"></span> Asignados</h3>
-                            <span className="bg-gray-200 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 text-xs font-bold px-2 py-0.5 rounded-full">{colAssigned.length}</span>
-                        </div>
-                        <div className="space-y-3 flex-1">
-                            {colAssigned.length === 0 ? <ColumnEmptyState icon={Coffee} title="Tiempo de descanso" message="No tienes tickets en cola por revisar." /> : colAssigned.map(t => <TicketCard key={t.id} ticket={t} />)}
                         </div>
                     </div>
 
