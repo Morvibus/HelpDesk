@@ -24,6 +24,7 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     role: RoleEnum
+    is_active: bool
     
     class Config:
         from_attributes = True
@@ -33,6 +34,11 @@ class UserPasswordUpdate(BaseModel):
     # Obligatoria al cambiar la propia contraseña; opcional cuando un admin resetea otra
     old_password: Optional[str] = None
     new_password: str
+
+# actualizar rol y estado de activación de un usuario (solo admin)
+class UserUpdate(BaseModel):
+    role: Optional[RoleEnum] = None
+    is_active: Optional[bool] = None
 
 # --- SCHEMAS DE TICKET ---
 class TicketCreate(BaseModel):

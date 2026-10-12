@@ -1,6 +1,6 @@
 """Visibilidad y pertenencia de tickets/mensajes/acciones según el rol."""
 import models
-from conftest import auth_headers, create_ticket, create_user
+from conftest import PASSWORD, auth_headers, create_ticket, create_user
 
 
 def test_empleado_solo_ve_sus_tickets(client, db):
@@ -148,3 +148,71 @@ def test_cambio_password_propia_requiere_la_actual(client, db):
     incorrecta = client.patch(url, json={"old_password": "mala", "new_password": "nueva1234"}, headers=headers)
     assert sin_actual.status_code == 400
     assert incorrecta.status_code == 400
+
+
+# --- ADMIN: gestión de usuarios (rol y activación) ---
+
+def test_admin_cambia_rol_de_usuario(client, db):
+    admin = create_user(db, "admin")
+    empleado = create_user(db, "employee")
+
+    r = client.patch(f"/users/{empleado.id}", json={"role": "technician"}, headers=auth_headers(admin))
+    assert r.status_code == 200
+    assert r.json()["role"] == "technician"
+    assert r.json()["is_active"] is True
+
+
+def test_admin_desactiva_usuario(client, db):
+    admin = create_user(db, "admin")
+    objetivo = create_user(db, "employee")
+
+    r = client.patch(f"/users/{objetivo.id}", json={"is_active": False}, headers=auth_headers(admin))
+    assert r.status_code == 200
+    assert r.json()["is_active"] is False
+
+
+def test_usuario_desactivado_no_puede_loguear(client, db):
+    admin = create_user(db, "admin")
+    objetivo = create_user(db, "employee")
+    client.patch(f"/users/{objetivo.id}", json={"is_active": False}, headers=auth_headers(admin))
+
+    r = client.post("/login", data={"username": objetivo.email, "password": PASSWORD})
+    assert r.status_code == 403
+
+
+def test_usuario_desactivado_no_accede_a_endpoints(client, db):
+    admin = create_user(db, "admin")
+    objetivo = create_user(db, "employee")
+    client.patch(f"/users/{objetivo.id}", json={"is_active": False}, headers=auth_headers(admin))
+
+    r = client.get("/tickets/", headers=auth_headers(objetivo))
+    assert r.status_code == 403
+
+
+def test_admin_no_puede_desactivarse_a_si_mismo(client, db):
+    admin = create_user(db, "admin")
+
+    r = client.patch(f"/users/{admin.id}", json={"is_active": False}, headers=auth_headers(admin))
+    assert r.status_code == 400
+
+
+def test_admin_no_puede_quitarse_el_rol_admin(client, db):
+    admin = create_user(db, "admin")
+
+    r = client.patch(f"/users/{admin.id}", json={"role": "technician"}, headers=auth_headers(admin))
+    assert r.status_code == 400
+
+
+def test_modificar_usuario_solo_admin(client, db):
+    empleado = create_user(db, "employee")
+    otro = create_user(db, "employee")
+
+    r = client.patch(f"/users/{otro.id}", json={"role": "technician"}, headers=auth_headers(empleado))
+    assert r.status_code == 403
+
+
+def test_actualizar_usuario_inexistente_404(client, db):
+    admin = create_user(db, "admin")
+
+    r = client.patch("/users/99999", json={"role": "technician"}, headers=auth_headers(admin))
+    assert r.status_code == 404

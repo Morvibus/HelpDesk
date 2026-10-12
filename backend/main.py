@@ -73,6 +73,14 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Cuenta desactivada por un administrador: se bloquea el acceso
+    if user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu cuenta está desactivada. Contacta a un administrador.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     # El token guardará el ID del usuario y su rol
     access_token = security.create_access_token(
         data={"sub": str(user.id), "role": user.role.value}
@@ -135,6 +143,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(models.User).filter(models.User.id == int(user_id)).first()
     if user is None:
         raise credentials_exception
+    # Un usuario desactivado pierde acceso al instante, aunque su JWT no haya vencido
+    if user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu cuenta está desactivada. Contacta a un administrador.",
+        )
     return user
 
 # --- ENDPOINTS DE TICKETS PROTEGIDOS ---
@@ -185,6 +199,41 @@ def get_users(
     total = query.count()
     users = query.order_by(models.User.id.asc()).offset(offset).limit(limit).all()
     return {"items": users, "total": total}
+
+# actualizar rol y estado de activación de un usuario (solo admin)
+@app.patch("/users/{user_id}", response_model=schemas.UserResponse)
+def update_user(
+    user_id: int,
+    user_update: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # REGLA DE NEGOCIO: Solo los administradores pueden modificar usuarios
+    if current_user.role != models.RoleEnum.admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar usuarios")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # ANTI LOCKOUT: un admin no puede desactivarse a sí mismo ni quitarse el rol admin
+    if user_id == current_user.id:
+        desactiva = user_update.is_active is False
+        autodegrada = user_update.role is not None and user_update.role != models.RoleEnum.admin
+        if desactiva or autodegrada:
+            raise HTTPException(
+                status_code=400,
+                detail="No puedes desactivarte ni quitarte el rol de administrador a ti mismo",
+            )
+
+    if user_update.role is not None:
+        user.role = user_update.role
+    if user_update.is_active is not None:
+        user.is_active = user_update.is_active
+
+    db.commit()
+    db.refresh(user)
+    return user
 
 # modificar password de un usuario (solo admin puede cambiar el password de otros usuarios)
 @app.patch("/users/{user_id}/password", response_model=schemas.UserResponse)
