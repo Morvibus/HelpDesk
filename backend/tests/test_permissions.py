@@ -1,4 +1,7 @@
 """Visibilidad y pertenencia de tickets/mensajes/acciones según el rol."""
+import uuid
+from datetime import timedelta
+
 import models
 from conftest import PASSWORD, auth_headers, create_ticket, create_user
 
@@ -118,6 +121,7 @@ def test_metricas_empleado_solo_cuentan_sus_tickets(client, db):
     assert data["total_tickets"] == 2
     assert data["tickets_by_status"]["created"] == 2
     assert data["resolved_by_technician"] == {}
+    assert data["avg_resolution_by_technician"] == {}
 
 
 def test_metricas_permitidas_para_tecnico_y_admin(client, db):
@@ -216,3 +220,65 @@ def test_actualizar_usuario_inexistente_404(client, db):
 
     r = client.patch("/users/99999", json={"role": "technician"}, headers=auth_headers(admin))
     assert r.status_code == 404
+
+
+def test_admin_edita_nombre_y_correo_de_usuario(client, db):
+    admin = create_user(db, "admin")
+    objetivo = create_user(db, "employee")
+    nuevo_email = f"editado-{uuid.uuid4().hex[:12]}@helpdesk-mock.com"
+
+    r = client.patch(
+        f"/users/{objetivo.id}",
+        json={"name": "Nombre Editado", "email": nuevo_email},
+        headers=auth_headers(admin),
+    )
+    assert r.status_code == 200
+    assert r.json()["name"] == "Nombre Editado"
+    assert r.json()["email"] == nuevo_email
+
+
+def test_admin_no_puede_repetir_correo_de_otro(client, db):
+    admin = create_user(db, "admin")
+    a = create_user(db, "employee")
+    b = create_user(db, "employee")
+
+    r = client.patch(f"/users/{b.id}", json={"email": a.email}, headers=auth_headers(admin))
+    assert r.status_code == 400
+
+
+def test_get_tickets_filtra_por_estado(client, db):
+    admin = create_user(db, "admin")
+    empleado = create_user(db, "employee")
+    t_abierto = create_ticket(db, empleado.id)
+    t_cerrado = create_ticket(db, empleado.id)
+    t_cerrado.status = models.StatusEnum.solved
+    db.commit()
+
+    r = client.get("/tickets/?status=solved", headers=auth_headers(admin))
+    ids = [t["id"] for t in r.json()["items"]]
+    assert ids == [t_cerrado.id]
+    assert t_abierto.id not in ids
+
+
+def test_get_tickets_filtro_respeta_visibilidad_empleado(client, db):
+    empleado = create_user(db, "employee")
+    ajeno = create_user(db, "employee")
+    mio = create_ticket(db, empleado.id)
+    create_ticket(db, ajeno.id)
+
+    r = client.get("/tickets/?status=created", headers=auth_headers(empleado))
+    ids = [t["id"] for t in r.json()["items"]]
+    assert ids == [mio.id]
+
+
+def test_metricas_promedio_resolucion_por_tecnico(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    ticket.status = models.StatusEnum.solved
+    ticket.closed_at = ticket.created_at + timedelta(hours=2)
+    db.commit()
+
+    data = client.get("/metrics/", headers=auth_headers(admin)).json()
+    assert data["avg_resolution_by_technician"] == {tecnico.name: 2.0}

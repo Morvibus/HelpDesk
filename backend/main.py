@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
+from typing import Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -230,6 +231,18 @@ def update_user(
         user.role = user_update.role
     if user_update.is_active is not None:
         user.is_active = user_update.is_active
+    if user_update.name is not None:
+        user.name = user_update.name
+    if user_update.email is not None:
+        # Unicidad del correo: puede repetir el propio, pero no el de otro usuario
+        exists = (
+            db.query(models.User)
+            .filter(models.User.email == user_update.email, models.User.id != user_id)
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=400, detail="El correo ya está registrado")
+        user.email = user_update.email
 
     db.commit()
     db.refresh(user)
@@ -269,6 +282,8 @@ def update_user_password(
 def get_tickets(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    status: Optional[models.StatusEnum] = Query(None),
+    priority: Optional[models.PriorityEnum] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user) # <- Requiere token válido
 ):
@@ -284,6 +299,12 @@ def get_tickets(
     else:
         # Si es admin, ve todos
         query = db.query(models.Ticket)
+
+    # Filtros opcionales: se aplican SIEMPRE después de la visibilidad por rol
+    if status is not None:
+        query = query.filter(models.Ticket.status == status)
+    if priority is not None:
+        query = query.filter(models.Ticket.priority == priority)
 
     total = query.count()
     # Orden estable con id como desempate: así offset no salta/repite filas entre páginas
@@ -627,6 +648,7 @@ def get_metrics(
     if current_user.role == models.RoleEnum.employee:
         query = db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id)
         resolved_by_tech = {}
+        avg_resolution_by_tech = {}
     else:
         query = db.query(models.Ticket)
         resolved_by_tech = {
@@ -635,6 +657,19 @@ def get_metrics(
             .filter(models.Ticket.status.in_([models.StatusEnum.solved, models.StatusEnum.closed]))
             .group_by(models.User.name).all()
         }
+
+        # Promedio de horas de resolución por técnico (closed_at - created_at)
+        resolution_rows = (
+            db.query(
+                models.User.name,
+                func.avg(func.extract("epoch", models.Ticket.closed_at - models.Ticket.created_at)) / 3600,
+            )
+            .join(models.Ticket, models.User.id == models.Ticket.assigned_to)
+            .filter(models.Ticket.status.in_([models.StatusEnum.solved, models.StatusEnum.closed]))
+            .group_by(models.User.name)
+            .all()
+        )
+        avg_resolution_by_tech = {name: round(avg, 2) for name, avg in resolution_rows if avg is not None}
 
     # 1. Total histórico de tickets (del alcance)
     total_tickets = query.count()
@@ -657,7 +692,8 @@ def get_metrics(
         "total_tickets": total_tickets,
         "tickets_by_status": tickets_by_status,
         "average_resolution_time_hours": round(avg_time_hours, 2),
-        "resolved_by_technician": resolved_by_tech
+        "resolved_by_technician": resolved_by_tech,
+        "avg_resolution_by_technician": avg_resolution_by_tech
     }
 
 

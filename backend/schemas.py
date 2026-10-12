@@ -35,8 +35,10 @@ class UserPasswordUpdate(BaseModel):
     old_password: Optional[str] = None
     new_password: str
 
-# actualizar rol y estado de activación de un usuario (solo admin)
+# actualizar nombre, correo, rol y estado de activación de un usuario (solo admin)
 class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
     role: Optional[RoleEnum] = None
     is_active: Optional[bool] = None
 
@@ -98,3 +100,4 @@ class MetricsResponse(BaseModel):
     tickets_by_status: dict[str, int]
     average_resolution_time_hours: float
     resolved_by_technician: dict[str, int]
+    avg_resolution_by_technician: dict[str, float]
