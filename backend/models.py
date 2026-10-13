@@ -22,7 +22,6 @@ class PriorityEnum(enum.Enum):
     low = "low"
     medium = "medium"
     high = "high"
-    urgent = "urgent"
 
 class ActionEnum(enum.Enum):
     status_change = "status_change"
@@ -61,6 +60,8 @@ class Ticket(Base):
     description = Column(Text, nullable=False)
     status = Column(Enum(StatusEnum), default=StatusEnum.created, nullable=False)
     priority = Column(Enum(PriorityEnum), default=PriorityEnum.low, nullable=False)
+    # Clasificacion opcional (mismas categorias que la biblioteca)
+    category = Column(Enum(CategoryEnum), nullable=True)
     
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True) # Puede ser nulo si no está asignado

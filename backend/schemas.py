@@ -50,6 +50,7 @@ class TicketCreate(BaseModel):
     title: str
     description: str
     priority: PriorityEnum = PriorityEnum.low
+    category: Optional[CategoryEnum] = None
     
    
 class TicketResponse(BaseModel):
@@ -58,6 +59,7 @@ class TicketResponse(BaseModel):
     description: str
     status: StatusEnum
     priority: PriorityEnum
+    category: Optional[CategoryEnum] = None
     created_by: int
     assigned_to: Optional[int] = None
     created_at: datetime

@@ -212,6 +212,7 @@ def create_ticket(
         title=ticket.title,
         description=ticket.description,
         priority=ticket.priority,
+        category=ticket.category,
         created_by=current_user.id
     )
     db.add(new_ticket)
