@@ -15,6 +15,10 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - **Alta de tickets** (nueva, sin pushear): wizard de 2 pasos (categoría+título → descripción+prioridad)
   con sugerencias de la biblioteca. `Ticket.category` opcional y `urgent` eliminado del sistema
   (`urgent→high`); migraciones `0cc57f299659` y `7d9423ec204c`, ambas con guard. 105 tests OK.
+- **Tema / modo oscuro** (nuevo, sin pushear): paleta armonizada (familia teal + acento ámbar),
+  escala `gray` redefinida como slate con tinte teal (elevación canvas < tarjeta < inset), `dark:`
+  por clase con `:where`, `color-scheme` light/dark, Login con modo oscuro y toasts con `!`.
+  lint 0 + build OK.
 - Base ya pusheada: Frontend F1-F5 (interceptor 401, error boundary, reconexión WS, initTheme,
   `/metrics/` por rol, `.oxlintrc.json` 0 warnings), responsive (navbar móvil, chat
   `h-[55vh] min-h-[400px] lg:h-[600px]`, tablero 2 columnas), vista admin (`PATCH /users/{id}`
@@ -67,7 +71,8 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   ahora es un hub único en `App`. El badge de la navbar cuenta `unreadTickets` (solo `new_message`).
 - oxlint: off en `react-in-jsx-scope` / `set-state-in-effect` / `react-hooks/exhaustive-deps`;
   `react/exhaustive-effect-dependencies` warn con disables comentados en deps intencionales.
-- Reconexión WS 1s→15s; 401 global → logout; `initTheme()` en `main.jsx` antes del render.
+- Reconexión WS 1s→15s; 401 global → logout; `initTheme()` en `main.jsx` antes del render (respeta
+  `prefers-color-scheme` si el usuario nunca eligió).
 - Migraciones automáticas en entrypoint; guards (`has_table`/`get_columns`/label de enum) en la
   inicial y en toda migración que cree algo que `create_all` ya pudo crear (lo exige su test de
   compatibilidad). Quitar un valor de enum (p. ej. `urgent`) obliga a recrear el tipo a mano:
@@ -79,6 +84,12 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - Alta de tickets: wizard de 2 pasos (categoría+título → descripción/prioridad), con soluciones
   sugeridas por categoría en el paso 2. `Ticket.category` reutiliza `CategoryEnum` y es nullable.
   Prioridades low/medium/high (sin `urgent`). El botón "Nuevo Ticket" solo se muestra a empleados.
+- Paleta/tema: `brand-primary` `#0d7c73` (AA sobre blanco y con texto blanco), `brand-dark` = hover,
+  `brand-light` `#2dd4bf` (+ `brand-light-hover`) para modo oscuro y `brand-accent` ámbar `#d97706`.
+  La escala `gray` de Tailwind se redefine (slate con tinte teal) porque TODA la app la usa para
+  superficies/textos: así el dark queda coherente sin tocar 100 clases (canvas `gray-950`/`brand-black`
+  < tarjeta `gray-900` < inset/input `gray-800`). Los tonos semánticos (estados/prioridades/categorías)
+  se mantienen. `themeStore` usa `prefers-color-scheme` si no hay preferencia guardada.
 - Error boundary como clase en `App.jsx` (React no permite boundaries funcionales).
 
 ## Aprendizajes y errores a evitar
