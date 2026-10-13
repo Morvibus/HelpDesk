@@ -9,6 +9,9 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   **Sin pushear**: tickets huérfanos (3 commits `adaabe3`/`4461f53`/`0de12b3`) + mejora de
   notificaciones (esta sesión).
 - Fase 3: Alembic (`4abf7e7a664b` con guards) + entrypoint + paginación `{items,total}`.
+- **Biblioteca de soluciones** (nueva, sin pushear): `/library/` + página `/biblioteca`. Publican
+  técnicos/admins (auto al marcar Solucionado + botón manual en tickets solved/closed); leen todos.
+  Una entrada por ticket (409 al duplicar). Migración `99713097ea4d` con guard. 99 tests OK.
 - Base ya pusheada: Frontend F1-F5 (interceptor 401, error boundary, reconexión WS, initTheme,
   `/metrics/` por rol, `.oxlintrc.json` 0 warnings), responsive (navbar móvil, chat
   `h-[55vh] min-h-[400px] lg:h-[600px]`, tablero 2 columnas), vista admin (`PATCH /users/{id}`
@@ -62,7 +65,12 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - oxlint: off en `react-in-jsx-scope` / `set-state-in-effect` / `react-hooks/exhaustive-deps`;
   `react/exhaustive-effect-dependencies` warn con disables comentados en deps intencionales.
 - Reconexión WS 1s→15s; 401 global → logout; `initTheme()` en `main.jsx` antes del render.
-- Migraciones automáticas en entrypoint; guards solo en la migración inicial (deuda de `create_all`).
+- Migraciones automáticas en entrypoint; guards (`inspector.has_table`) en la inicial y en toda
+  migración que cree una tabla que `create_all` ya pudo crear (lo exige su test de compatibilidad).
+- Biblioteca: publican técnicos/admins y leen todos (autoservicio). `ticket_id` único (una entrada
+  por ticket); la solución se redacta a mano (nunca se copian notas privadas). Categorías enum fijo
+  (network/hardware/software/access/email/other). Editar/borrar = autor o admin. Al resolver se
+  abre el modal prefiltrado con título/descripción del ticket.
 - Error boundary como clase en `App.jsx` (React no permite boundaries funcionales).
 
 ## Aprendizajes y errores a evitar

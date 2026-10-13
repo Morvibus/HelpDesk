@@ -24,6 +24,10 @@ Comunicación en tiempo real por chat (WebSocket), notificaciones globales y not
 - **🛠️ Técnico:** ve los tickets sin asignar y los suyos, los toma ("Tomar Ticket" / "Reclamar asignación"), los resuelve y usa notas privadas internas.
 - **👑 Administrador:** visibilidad global, lista de usuarios, cambio de contraseñas y dashboard de métricas (`/metrics/`).
 
+También existe una **Biblioteca de Soluciones** (`/biblioteca`): técnicos y admins publican las
+soluciones de los tickets resueltos (automático al marcar "Solucionado" o desde el detalle del
+ticket) y todos los roles pueden consultarlas y buscarlas.
+
 ## 🚀 Inicio Rápido
 
 ```bash
