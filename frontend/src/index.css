@@ -1,13 +1,46 @@
 @import "tailwindcss";
 
+/* Modo oscuro por clase en <html> (incluye al propio .dark, no solo a sus hijos) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-    /* Definimos tu paleta de colores personalizada */
-    --color-brand-primary: #87CCC9;
-    --color-brand-dark: #4E8D31;
-    --color-brand-light: #3EBAC3;
-    --color-brand-accent: #A9C948;
-    --color-brand-black: #282D36;
+    /* --- Neutros ---
+       La app usa la escala `gray` para TODAS sus superficies y textos, así que
+       la redefinimos como un slate frío con tinte teal, con elevación real en
+       modo oscuro: brand-black (canvas) < gray-900 (tarjeta) < gray-800 (inset).
+       No usar los grises por defecto de Tailwind en componentes nuevos. */
+    --color-gray-50: #f4f7f8;
+    --color-gray-100: #eef3f4;
+    --color-gray-200: #e2e8ea;
+    --color-gray-300: #cbd5d8;
+    --color-gray-400: #8fa0a8;
+    --color-gray-500: #64777d;
+    --color-gray-600: #4a5b62;
+    --color-gray-700: #36434d;
+    --color-gray-800: #1e272e;
+    --color-gray-900: #151c22;
+    --color-gray-950: #0b1116;
+
+    /* --- Marca: una sola familia teal + acento ámbar --- */
+    --color-brand-primary: #0d7c73;      /* botones y enlaces (AA sobre blanco) */
+    --color-brand-dark: #0a5f58;         /* hover de primary (mismo teal, más oscuro) */
+    --color-brand-light: #2dd4bf;        /* acento de marca en modo oscuro */
+    --color-brand-light-hover: #14b8a6;  /* hover del anterior (sigue oscureciendo) */
+    --color-brand-accent: #d97706;       /* acento cálido secundario */
+    --color-brand-black: #0b1116;        /* canvas oscuro (coincide con gray-950) */
 }
 
-/* Habilitar el cambio de modo oscuro mediante la clase "dark" en HTML */
-@custom-variant dark (&:is(.dark *));
+/* Controles nativos (scrollbar, select, date pickers, autofill) en cada tema */
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+@layer base {
+    body {
+        background-color: var(--color-gray-50);
+        color: var(--color-gray-900);
+    }
+    .dark body {
+        background-color: var(--color-brand-black);
+        color: var(--color-gray-50);
+    }
+}

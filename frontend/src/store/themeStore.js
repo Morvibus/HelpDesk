@@ -1,27 +1,33 @@
 // frontend/src/store/themeStore.js
 import { create } from "zustand";
 
+// Preferencia del SO; se usa solo cuando el usuario no eligió nada todavía
+const prefiereOscuro = () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+
+const temaInicial = () => {
+    const guardado = localStorage.getItem("theme");
+    return guardado ? guardado === "dark" : prefiereOscuro();
+};
+
+const aplicar = (isDark) => {
+    document.documentElement.classList.toggle("dark", isDark);
+};
+
 export const useThemeStore = create((set) => ({
-    isDark: localStorage.getItem("theme") === "dark",
+    isDark: temaInicial(),
 
     toggleTheme: () =>
         set((state) => {
             const newTheme = !state.isDark;
             localStorage.setItem("theme", newTheme ? "dark" : "light");
-
-            // Aplicamos o quitamos la clase 'dark' al HTML principal
-            if (newTheme) {
-                document.documentElement.classList.add("dark");
-            } else {
-                document.documentElement.classList.remove("dark");
-            }
-
+            aplicar(newTheme);
             return { isDark: newTheme };
         }),
 
-    // Función para inicializar el tema al cargar la app
+    // Sincroniza el <html> con la preferencia guardada (o la del SO) al cargar
     initTheme: () => {
-        const isDark = localStorage.getItem("theme") === "dark";
-        if (isDark) document.documentElement.classList.add("dark");
+        const isDark = temaInicial();
+        aplicar(isDark);
+        set({ isDark });
     },
 }));
