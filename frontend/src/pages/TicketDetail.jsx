@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api, wsUrl } from '../api'
 import { toast } from 'react-hot-toast'
 import Layout from '../components/Layout'
+import ArticleModal from '../components/ArticleModal'
 import { useAuthStore, decodeToken } from '../store/authStore'
-import { ArrowLeft, MessageSquare, Clock, AlertCircle, Send, RefreshCw, CheckCircle2, Lock, UserPlus } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Clock, AlertCircle, Send, RefreshCw, CheckCircle2, Lock, UserPlus, BookOpen } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 
 export default function TicketDetail() {
@@ -31,6 +32,11 @@ export default function TicketDetail() {
     const [actionLoading, setActionLoading] = useState(false)
     const [actionError, setActionError] = useState('')
     const [wsAbierto, setWsAbierto] = useState(false)
+
+    // Biblioteca: entrada ligada a este ticket (null si no está publicada)
+    const [entradaBiblioteca, setEntradaBiblioteca] = useState(null)
+    const [mostrarModalArticulo, setMostrarModalArticulo] = useState(false)
+    const [recargaBiblioteca, setRecargaBiblioteca] = useState(0)
 
     const ws = useRef(null)
     const messagesEndRef = useRef(null)
@@ -88,6 +94,21 @@ export default function TicketDetail() {
         fetchTicketData(controller.signal)
         return () => controller.abort()
     }, [id, token, refreshTrigger])
+    // oxlint-enable react/exhaustive-effect-dependencies
+
+    // ¿Este ticket ya está documentado en la biblioteca? (solo técnicos/admins)
+    // oxlint-disable react/exhaustive-effect-dependencies -- token recarga a propósito
+    useEffect(() => {
+        if (!isTech) return
+        const controller = new AbortController()
+        api.get('/library/', { params: { ticket_id: id, limit: 1 }, signal: controller.signal })
+            .then(res => setEntradaBiblioteca(res.data.items[0] || null))
+            .catch(err => {
+                if (err.code === 'ERR_CANCELED') return
+                console.error('Error al consultar la biblioteca:', err)
+            })
+        return () => controller.abort()
+    }, [id, isTech, token, recargaBiblioteca])
     // oxlint-enable react/exhaustive-effect-dependencies
 
     // 2. Conectar WebSocket (con reconexión por si el backend se cae)
@@ -184,6 +205,10 @@ export default function TicketDetail() {
 
             await api.patch(`/tickets/${id}`, update)
             await fetchTicketData() // Recargamos para ver los cambios
+            // Publicación asistida: al resolver, se ofrece documentar la solución
+            if (newStatus === 'solved' && isTech && !entradaBiblioteca) {
+                setMostrarModalArticulo(true)
+            }
         } catch {
             setActionError('Error al actualizar el estado del ticket')
         } finally {
@@ -270,6 +295,31 @@ export default function TicketDetail() {
                                     {(['assigned', 'in_process'].includes(ticket.status) && !(ticket.status === 'in_process' && ticket.assigned_to == null)) && (
                                         <button onClick={() => handleStatusChange('solved')} disabled={actionLoading} className="w-full flex justify-center items-center px-4 py-2 bg-brand-light text-white hover:bg-green-600 rounded-lg transition-colors text-sm font-medium">
                                             <CheckCircle2 className="w-4 h-4 mr-2" /> Marcar como Solucionado
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Biblioteca: documentar la solución de un ticket resuelto/cerrado */}
+                            {isTech && isTicketClosed && (
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">Biblioteca de Soluciones</h4>
+                                    {entradaBiblioteca ? (
+                                        <div className="bg-brand-primary/5 dark:bg-brand-light/10 border border-brand-primary/10 dark:border-brand-light/20 rounded-lg p-3">
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Esta solución ya está publicada.</p>
+                                            <button
+                                                onClick={() => navigate('/biblioteca')}
+                                                className="w-full flex justify-center items-center px-4 py-2 text-sm font-medium rounded-lg border border-brand-primary/30 dark:border-brand-light/30 text-brand-primary dark:text-brand-light hover:bg-brand-primary/10 dark:hover:bg-brand-light/10 transition-colors"
+                                            >
+                                                <BookOpen className="w-4 h-4 mr-2" /> Ver en Biblioteca
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => setMostrarModalArticulo(true)}
+                                            className="w-full flex justify-center items-center px-4 py-2 bg-brand-primary text-white hover:bg-brand-dark rounded-lg transition-colors text-sm font-medium"
+                                        >
+                                            <BookOpen className="w-4 h-4 mr-2" /> Publicar en Biblioteca
                                         </button>
                                     )}
                                 </div>
@@ -391,6 +441,19 @@ export default function TicketDetail() {
 
                 </div>
             </div>
+
+            {/* Publicación asistida desde el ticket resuelto */}
+            {mostrarModalArticulo && (
+                <ArticleModal
+                    onClose={() => setMostrarModalArticulo(false)}
+                    onSaved={() => {
+                        setMostrarModalArticulo(false)
+                        setRecargaBiblioteca(n => n + 1)
+                        toast.success('Publicado en la biblioteca')
+                    }}
+                    ticket={{ id: ticket.id, title: ticket.title, description: ticket.description }}
+                />
+            )}
         </Layout>
     )
 }

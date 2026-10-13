@@ -1,4 +1,4 @@
-import { LogOut, Ticket, PlusCircle, Moon, Sun } from 'lucide-react'
+import { LogOut, Ticket, PlusCircle, Moon, Sun, BookOpen } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
 import { useNavigate, NavLink } from 'react-router-dom'
@@ -51,6 +51,10 @@ export default function Layout({ children }) {
                                         Admin
                                     </NavLink>
                                 )}
+                                <NavLink to="/biblioteca" className={({ isActive }) => `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${isActive ? 'border-brand-primary dark:border-brand-light text-brand-primary dark:text-brand-light' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+                                    <BookOpen className="w-4 h-4 mr-1.5" />
+                                    Biblioteca
+                                </NavLink>
                             </div>
                         </div>
 

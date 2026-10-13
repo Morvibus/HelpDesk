@@ -5,6 +5,7 @@ import NotificationsHub from './components/NotificationsHub'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import TicketDetail from './pages/TicketDetail'
+import Library from './pages/Library'
 import AdminPanel from './pages/AdminPanel'
 
 const ProtectedRoute = ({ children }) => {
@@ -80,6 +81,11 @@ export default function App() {
           <Route path="/ticket/:id" element={
             <ProtectedRoute>
               <TicketDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/biblioteca" element={
+            <ProtectedRoute>
+              <Library />
             </ProtectedRoute>
           } />
           <Route path="/admin" element={
