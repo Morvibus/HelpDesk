@@ -3,10 +3,10 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, tokens ni datos personales.
 
-## Estado actual (2026-10-12)
+## Estado actual (2026-10-13)
 
-- Previo pusheado (`origin/main` = `a2c07c5`): F1, docs, F5+oxlint, docs. Los commits nuevos
-  (responsive, asignaciones, vista admin, admin potenciado) quedan sin push.
+- Todo pusheado: `origin/main` = `1c9c5ea` (responsive, asignaciones, vista admin, admin
+  potenciado y horas hábiles). El árbol queda limpio.
 - Fase 3: Alembic (`4abf7e7a664b` con guards) + entrypoint + paginación `{items,total}`. 53 tests.
 - Frontend F1-F3 + F5: interceptor 401, error boundary, reconexión WS, initTheme, `/metrics/` por
   rol (KPIs del Dashboard = única fuente). `.oxlintrc.json`: 0 warnings.
@@ -14,10 +14,10 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   tablero a 2 columnas (En Proceso incluye `assigned` legacy). (187b19d, 0dc2790, f5c8fe6, f488619)
 - Vista admin: `PATCH /users/{id}` (rol/is_active, anti-lockout), login/get_current_user con
   `is_active`, `AdminPanel.jsx` + ruta /admin. 61 tests. (ead4605, 22556fb, 2578856)
-- **Admin potenciado (esta sesión)**: `AdminPanel.jsx` en 3 pestañas (Usuarios · Tickets ·
-  Rendimiento); editar nombre/correo; filtros `status`/`priority` en `GET /tickets/`; reasignar
-  tickets; promedio de resolución por técnico en `/metrics/`. (1fb3703, 73f84b0, eb1d0d7)
-- **Horas hábiles (esta sesión, sin commitear)**: `/metrics/` agrega
+- Admin potenciado: `AdminPanel.jsx` en 3 pestañas (Usuarios · Tickets · Rendimiento); editar
+  nombre/correo; filtros `status`/`priority` en `GET /tickets/`; reasignar tickets; promedio de
+  resolución por técnico en `/metrics/`. (1fb3703, 73f84b0, eb1d0d7)
+- **Horas hábiles**: `/metrics/` agrega
   `average_resolution_business_hours` y `avg_resolution_by_technician_business`;
   `TicketResponse.business_age_hours` por ticket; el panel admin mide resolución y antigüedad en
   horas hábiles (con el calendario como referencia). Backend: 75 tests en verde. Frontend: lint 0 +
@@ -65,9 +65,10 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   `docker compose restart frontend`.
 - Watcher de Vite en bind mounts de Windows puede servir el módulo viejo (incluso con `?t=`):
   verificar el archivo en el contenedor y, si está bien pero no se sirve, `docker compose restart`.
+- `git commit -m`/pipe de PowerShell mutila los acentos de los mensajes (técnico→t?cnico):
+  escribir el mensaje en un archivo UTF-8 y usar `git commit -F <archivo>`. El historial del repo
+  ya viene sin acentos (gestion, movil...), mantener ese estilo.
 
 ## Próximos pasos
 
 - Vigilar httpx → httpx2 cuando Starlette quite el soporte a httpx en testclient.
-- Push de los commits locales (responsive + asignaciones + vista admin + admin potenciado + horas
-  hábiles) cuando el usuario lo indique.
