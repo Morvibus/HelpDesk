@@ -29,6 +29,14 @@ class ActionEnum(enum.Enum):
     escalated = "escalated"
     reopened = "reopened"
 
+class CategoryEnum(enum.Enum):
+    network = "network"
+    hardware = "hardware"
+    software = "software"
+    access = "access"
+    email = "email"
+    other = "other"
+
 # --- MODELOS ---
 class User(Base):
     __tablename__ = "users"
@@ -95,3 +103,25 @@ class TicketHistory(Base):
     # Relaciones
     ticket = relationship("Ticket", back_populates="history")
     user = relationship("User")
+
+class KnowledgeArticle(Base):
+    """Entrada de la biblioteca de problemas y soluciones.
+
+    Nace a partir de un ticket resuelto/cerrado (opcional) o de forma libre.
+    `ticket_id` es unico: una sola entrada por ticket (evita duplicados).
+    """
+    __tablename__ = "knowledge_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=True, unique=True, index=True)
+    title = Column(String, nullable=False)
+    problem = Column(Text, nullable=False)
+    solution = Column(Text, nullable=False)
+    category = Column(Enum(CategoryEnum), default=CategoryEnum.other, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relaciones
+    ticket = relationship("Ticket")
+    author = relationship("User")

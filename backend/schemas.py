@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Generic, Optional, TypeVar
 from datetime import datetime
-from models import StatusEnum, PriorityEnum, RoleEnum, ActionEnum
+from models import StatusEnum, PriorityEnum, RoleEnum, ActionEnum, CategoryEnum
 
 # --- PAGINACIÓN ---
 ItemT = TypeVar("ItemT")
@@ -109,3 +109,31 @@ class MetricsResponse(BaseModel):
     resolved_by_technician: dict[str, int]
     avg_resolution_by_technician: dict[str, float]
     avg_resolution_by_technician_business: dict[str, float]
+
+# --- SCHEMAS DE BIBLIOTECA (problemas y soluciones) ---
+class ArticleCreate(BaseModel):
+    ticket_id: Optional[int] = None
+    title: str
+    problem: str
+    solution: str
+    category: CategoryEnum = CategoryEnum.other
+
+class ArticleUpdate(BaseModel):
+    title: Optional[str] = None
+    problem: Optional[str] = None
+    solution: Optional[str] = None
+    category: Optional[CategoryEnum] = None
+
+class ArticleResponse(BaseModel):
+    id: int
+    ticket_id: Optional[int] = None
+    title: str
+    problem: str
+    solution: str
+    category: CategoryEnum
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
