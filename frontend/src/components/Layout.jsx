@@ -4,10 +4,7 @@ import { useThemeStore } from '../store/themeStore'
 import { useNavigate, NavLink } from 'react-router-dom'
 import { useUIStore } from '../store/uiStore'
 import NewTicketModal from './NewTicketModal'
-import { useEffect } from 'react'
-import { Toaster, toast } from 'react-hot-toast'
 import Avatar from 'boring-avatars'
-import { wsUrl } from '../api'
 
 export default function Layout({ children }) {
     const logout = useAuthStore(state => state.logout)
@@ -15,86 +12,14 @@ export default function Layout({ children }) {
     const { isDark, toggleTheme } = useThemeStore()
     const navigate = useNavigate()
     const { openTicketModal } = useUIStore()
-    const token = useAuthStore(state => state.token)
     const email = useAuthStore((state) => state.email)
+    const unreadCount = useUIStore(state => state.unreadTickets.length)
 
 
     const handleLogout = () => {
         logout()
         navigate('/login')
     }
-
-    useEffect(() => {
-        if (!token) return
-
-        let ws = null // Es una variable normal, no usamos .current aquí
-        let isMounted = true
-        let reintentos = 0
-        let timerId = null
-
-        const conectar = () => {
-            if (!isMounted) return
-
-            ws = new WebSocket(wsUrl('/ws/notifications'), ['auth', token])
-
-            ws.onopen = () => { reintentos = 0 }
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data)
-
-                // 1. Leemos la URL actual
-                const currentPath = window.location.pathname
-                const isViewingCurrentTicket = currentPath === `/ticket/${data.ticket_id}`
-
-                // 2. Refrescamos datos en segundo plano si es necesario
-                if (data.type === 'refresh') {
-                    useUIStore.getState().triggerRefresh()
-                }
-
-                // 3. Notificación visual (Punto rojo)
-                if (data.type === 'new_message' && data.ticket_id) {
-                    if (!isViewingCurrentTicket) {
-                        useUIStore.getState().addUnreadTicket(data.ticket_id)
-                    }
-                }
-
-                // 4. Notificación flotante (Toast)
-                if (!isViewingCurrentTicket) {
-                    toast(
-                        <div className="flex flex-col">
-                            <span className="font-bold text-sm text-gray-900 dark:text-white">{data.title}</span>
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{data.message}</span>
-                        </div>,
-                        { icon: data.icon, duration: 5000 }
-                    )
-                }
-            }
-
-            ws.onerror = () => {
-                console.debug("Desconexión menor del WebSocket de notificaciones.")
-            }
-
-            // Si el socket se cae (reinicio del backend, red...), reconectamos con backoff
-            ws.onclose = () => {
-                if (!isMounted) return
-                reintentos += 1
-                const delay = Math.min(1000 * 2 ** reintentos, 15000)
-                timerId = setTimeout(conectar, delay)
-            }
-        }
-
-        // Margen inicial: StrictMode monta el efecto dos veces en dev y así no abrimos dos sockets
-        timerId = setTimeout(conectar, 500)
-
-        // Función de limpieza
-        return () => {
-            isMounted = false
-            clearTimeout(timerId)
-            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-                ws.close()
-            }
-        }
-    }, [token])
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-brand-black transition-colors duration-200">
@@ -112,6 +37,14 @@ export default function Layout({ children }) {
                             <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
                                 <NavLink to="/" end className={({ isActive }) => `${isActive ? 'border-brand-primary dark:border-brand-light text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}>
                                     Mis Tickets
+                                    {unreadCount > 0 && (
+                                        <span
+                                            aria-label={`${unreadCount} ticket(s) con mensajes sin leer`}
+                                            className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full"
+                                        >
+                                            {unreadCount}
+                                        </span>
+                                    )}
                                 </NavLink>
                                 {role === 'admin' && (
                                     <NavLink to="/admin" className={({ isActive }) => `${isActive ? 'border-brand-primary dark:border-brand-light text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}>
@@ -173,13 +106,6 @@ export default function Layout({ children }) {
                 {children}
             </main>
             <NewTicketModal />
-
-            <Toaster
-                position="top-right"
-                toastOptions={{
-                    className: 'dark:bg-gray-800 dark:text-white border border-gray-200 dark:border-gray-700 shadow-lg'
-                }}
-            />
         </div>
     )
 }

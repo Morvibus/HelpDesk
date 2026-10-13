@@ -1,6 +1,7 @@
 import { Component, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore, isTokenExpired } from './store/authStore'
+import NotificationsHub from './components/NotificationsHub'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import TicketDetail from './pages/TicketDetail'
@@ -65,6 +66,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        {/* Hub persistente: el WebSocket de notificaciones vive acá, fuera de las
+            páginas, para no reconectarse (ni perder avisos) al navegar. */}
+        <NotificationsHub />
         <Routes>
           <Route path="/login" element={<Login />} />
 

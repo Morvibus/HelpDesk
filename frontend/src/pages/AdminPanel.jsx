@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import Layout from '../components/Layout'
 import { useAuthStore } from '../store/authStore'
+import { useUIStore } from '../store/uiStore'
 import { toast } from 'react-hot-toast'
 import { Users, UserPlus, Loader2, KeyRound, X, ShieldCheck, Pencil, LayoutGrid, TrendingUp, Clock, Inbox, Hourglass } from 'lucide-react'
 
@@ -763,6 +764,9 @@ const TicketsTab = () => {
     const [userMap, setUserMap] = useState({})
     const [candidateTechs, setCandidateTechs] = useState([])
     const [reassigningId, setReassigningId] = useState(null)
+    // El hub de notificaciones incrementa refreshTrigger ante eventos del backend;
+    // lo usamos para recargar la lista en vivo (como hace el Dashboard).
+    const refreshTrigger = useUIStore(state => state.refreshTrigger)
 
     const buildParams = (limit, off) => {
         const params = { limit, offset: off }
@@ -808,7 +812,7 @@ const TicketsTab = () => {
 
         cargar()
         return () => controller.abort()
-    }, [statusFilter, priorityFilter])
+    }, [statusFilter, priorityFilter, refreshTrigger])
     // oxlint-enable react/exhaustive-effect-dependencies
 
     const loadMore = async () => {
