@@ -26,10 +26,12 @@ const PRIORITY_STYLES = {
     urgent: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50',
 }
 
-// Semáforo de antigüedad: umbrales en horas por prioridad (alerta de eficiencia)
-const AGE_THRESHOLDS = { urgent: 24, high: 48, medium: 72, low: 120 }
+// Semáforo de antigüedad: umbrales en HORAS HÁBILES por prioridad (jornada lun-vie
+// 07:30-17:00, sáb 07:30-12:00). Aprox. 1 / 2 / 3 / 5 días hábiles.
+const AGE_THRESHOLDS = { urgent: 10, high: 20, medium: 30, low: 48 }
 
-const ageHours = (ticket) => (Date.now() - new Date(ticket.created_at).getTime()) / 3600000
+// La antigüedad en horas hábiles la calcula el backend (campo business_age_hours).
+const businessAgeHours = (ticket) => ticket.business_age_hours ?? 0
 const formatAge = (hours) => {
     if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`
     if (hours < 24) return `${Math.round(hours)} h`
@@ -37,7 +39,7 @@ const formatAge = (hours) => {
     return `${(hours / 24 / 30).toFixed(1)} meses`
 }
 const ageTone = (priority, hours) => {
-    const threshold = AGE_THRESHOLDS[priority] || 72
+    const threshold = AGE_THRESHOLDS[priority] || 48
     if (hours > threshold) return 'text-red-600 dark:text-red-400 font-semibold'
     if (hours > threshold / 2) return 'text-amber-600 dark:text-amber-400 font-semibold'
     return 'text-gray-500 dark:text-gray-400'
@@ -778,7 +780,7 @@ const TicketsTab = () => {
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Creador</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Asignado</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Antigüedad</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Antigüedad (hábil)</th>
                                         <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Asignar a</th>
                                     </tr>
                                 </thead>
@@ -797,7 +799,7 @@ const TicketsTab = () => {
                                                 <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{userMap[t.created_by]?.name || `#${t.created_by}`}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{userMap[t.assigned_to]?.name || '—'}</td>
-                                                <td className="px-6 py-4 text-sm"><span className={ageTone(t.priority, ageHours(t))}>{formatAge(ageHours(t))}</span></td>
+                                                <td className="px-6 py-4 text-sm"><span className={ageTone(t.priority, businessAgeHours(t))}>{formatAge(businessAgeHours(t))}</span></td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex justify-end">
                                                         <select
@@ -901,23 +903,28 @@ const PerformanceTab = () => {
     const openTickets = tickets
         .filter(t => activeStatuses.includes(t.status))
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    const maxAge = openTickets.length ? Math.max(...openTickets.map(t => ageHours(t))) : 0
+    const maxAge = openTickets.length ? Math.max(...openTickets.map(t => businessAgeHours(t))) : 0
 
     const ticketsByStatus = metrics?.tickets_by_status || {}
     const activeCount = (ticketsByStatus.created || 0) + (ticketsByStatus.assigned || 0) + (ticketsByStatus.in_process || 0)
 
     const resolvedByTech = metrics?.resolved_by_technician || {}
     const avgByTech = metrics?.avg_resolution_by_technician || {}
-    const techNames = new Set([...Object.keys(resolvedByTech), ...Object.keys(avgByTech)])
+    const avgByTechBusiness = metrics?.avg_resolution_by_technician_business || {}
+    const techNames = new Set([...Object.keys(resolvedByTech), ...Object.keys(avgByTech), ...Object.keys(avgByTechBusiness)])
     const techRows = [...techNames]
         .map(name => ({
             name,
             resolved: resolvedByTech[name] || 0,
-            avgHours: avgByTech[name] !== undefined ? avgByTech[name] : null,
+            avgHours: avgByTechBusiness[name] !== undefined
+                ? avgByTechBusiness[name]
+                : (avgByTech[name] !== undefined ? avgByTech[name] : null),
+            calendarHours: avgByTech[name] !== undefined ? avgByTech[name] : null,
         }))
         .sort((a, b) => (b.avgHours ?? 0) - (a.avgHours ?? 0))
 
-    const avgResolution = metrics?.average_resolution_time_hours
+    const avgResolutionBusiness = metrics?.average_resolution_business_hours
+    const avgResolutionCalendar = metrics?.average_resolution_time_hours
 
     return (
         <>
@@ -929,10 +936,13 @@ const PerformanceTab = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
                     <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Prom. resolución</p>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Prom. resolución (hábil)</p>
                         <Clock className="w-5 h-5 text-brand-primary dark:text-brand-light" />
                     </div>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{avgResolution != null ? `${avgResolution} h` : '—'}</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{avgResolutionBusiness != null ? `${avgResolutionBusiness} h` : '—'}</p>
+                    {avgResolutionCalendar != null && avgResolutionCalendar !== avgResolutionBusiness && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{avgResolutionCalendar} h calendario</p>
+                    )}
                 </div>
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
                     <div className="flex items-center justify-between mb-2">
@@ -943,7 +953,7 @@ const PerformanceTab = () => {
                 </div>
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
                     <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Antigüedad máxima</p>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Antigüedad máxima (hábil)</p>
                         <Hourglass className="w-5 h-5 text-brand-primary dark:text-brand-light" />
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{openTickets.length ? formatAge(maxAge) : '—'}</p>
@@ -956,7 +966,7 @@ const PerformanceTab = () => {
                     <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5"></span>OK: dentro del umbral</span>
                     <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 mr-1.5"></span>Atención: pasó la mitad del umbral</span>
                     <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-1.5"></span>Crítico: superó el umbral</span>
-                    <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600 mr-1.5"></span>Umbrales: urgente 24 h · alta 48 h · media 72 h · baja 120 h</span>
+                    <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600 mr-1.5"></span>Umbrales (hábiles): urgente 10 h · alta 20 h · media 30 h · baja 48 h</span>
                 </div>
             </div>
 
@@ -982,7 +992,7 @@ const PerformanceTab = () => {
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prioridad</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Asignado</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Antigüedad</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Antigüedad (hábil)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -998,7 +1008,7 @@ const PerformanceTab = () => {
                                         <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
                                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{userMap[t.assigned_to]?.name || 'Sin asignar'}</td>
                                         <td className="px-6 py-4 text-sm">
-                                            <span className={ageTone(t.priority, ageHours(t))}>{formatAge(ageHours(t))}</span>
+                                            <span className={ageTone(t.priority, businessAgeHours(t))}>{formatAge(businessAgeHours(t))}</span>
                                         </td>
                                     </tr>
                                 ))}
@@ -1011,7 +1021,7 @@ const PerformanceTab = () => {
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-white">Rendimiento por técnico</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Tickets resueltos y promedio de horas hasta la resolución</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Tickets resueltos y promedio de horas hábiles hasta la resolución</p>
                 </div>
                 {techRows.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -1028,7 +1038,7 @@ const PerformanceTab = () => {
                                 <tr>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Técnico</th>
                                     <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Resueltos</th>
-                                    <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prom. horas</th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prom. hábil</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1043,8 +1053,11 @@ const PerformanceTab = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right text-sm text-gray-600 dark:text-gray-400">{tech.resolved}</td>
-                                        <td className="px-6 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
-                                            {tech.avgHours != null ? `${tech.avgHours} h` : '—'}
+                                        <td className="px-6 py-4 text-right">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{tech.avgHours != null ? `${tech.avgHours} h` : '—'}</p>
+                                            {tech.calendarHours != null && tech.calendarHours !== tech.avgHours && (
+                                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{tech.calendarHours} h calendario</p>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
