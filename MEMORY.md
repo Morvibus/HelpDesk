@@ -12,6 +12,9 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - **Biblioteca de soluciones** (nueva, sin pushear): `/library/` + página `/biblioteca`. Publican
   técnicos/admins (auto al marcar Solucionado + botón manual en tickets solved/closed); leen todos.
   Una entrada por ticket (409 al duplicar). Migración `99713097ea4d` con guard. 99 tests OK.
+- **Alta de tickets** (nueva, sin pushear): wizard de 2 pasos (categoría+título → descripción+prioridad)
+  con sugerencias de la biblioteca. `Ticket.category` opcional y `urgent` eliminado del sistema
+  (`urgent→high`); migraciones `0cc57f299659` y `7d9423ec204c`, ambas con guard. 105 tests OK.
 - Base ya pusheada: Frontend F1-F5 (interceptor 401, error boundary, reconexión WS, initTheme,
   `/metrics/` por rol, `.oxlintrc.json` 0 warnings), responsive (navbar móvil, chat
   `h-[55vh] min-h-[400px] lg:h-[600px]`, tablero 2 columnas), vista admin (`PATCH /users/{id}`
@@ -41,7 +44,7 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   y se ve en "En Proceso" vía filtro legacy hasta que el técnico lo atienda.
 - Nombres en tablas admin se resuelven en frontend con `GET /users/` (página solo-admin; no se toca
   `TicketResponse`).
-- Semáforo de antigüedad en HORAS HÁBILES (urgente 10 / alta 20 / media 30 / baja 48);
+- Semáforo de antigüedad en HORAS HÁBILES (alta 20 / media 30 / baja 48);
   rojo > umbral, ámbar > mitad, verde <= mitad.
 - Horas hábiles: helper `business_hours_between` en `main.py` es la única fuente (el frontend NO
   duplica la lógica: consume `business_age_hours`). Zona `UTC-6` fija; jornada lun-vie 07:30-17:00
@@ -65,12 +68,17 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - oxlint: off en `react-in-jsx-scope` / `set-state-in-effect` / `react-hooks/exhaustive-deps`;
   `react/exhaustive-effect-dependencies` warn con disables comentados en deps intencionales.
 - Reconexión WS 1s→15s; 401 global → logout; `initTheme()` en `main.jsx` antes del render.
-- Migraciones automáticas en entrypoint; guards (`inspector.has_table`) en la inicial y en toda
-  migración que cree una tabla que `create_all` ya pudo crear (lo exige su test de compatibilidad).
+- Migraciones automáticas en entrypoint; guards (`has_table`/`get_columns`/label de enum) en la
+  inicial y en toda migración que cree algo que `create_all` ya pudo crear (lo exige su test de
+  compatibilidad). Quitar un valor de enum (p. ej. `urgent`) obliga a recrear el tipo a mano:
+  Postgres no borra valores y Alembic no lo autogenera.
 - Biblioteca: publican técnicos/admins y leen todos (autoservicio). `ticket_id` único (una entrada
   por ticket); la solución se redacta a mano (nunca se copian notas privadas). Categorías enum fijo
   (network/hardware/software/access/email/other). Editar/borrar = autor o admin. Al resolver se
   abre el modal prefiltrado con título/descripción del ticket.
+- Alta de tickets: wizard de 2 pasos (categoría+título → descripción/prioridad), con soluciones
+  sugeridas por categoría en el paso 2. `Ticket.category` reutiliza `CategoryEnum` y es nullable.
+  Prioridades low/medium/high (sin `urgent`). El botón "Nuevo Ticket" solo se muestra a empleados.
 - Error boundary como clase en `App.jsx` (React no permite boundaries funcionales).
 
 ## Aprendizajes y errores a evitar

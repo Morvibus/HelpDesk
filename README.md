@@ -8,6 +8,7 @@
 Aplicación de gestión de tickets de soporte técnico: los empleados reportan incidentes,
 los técnicos los atienden y los administradores controlan usuarios y métricas.
 Comunicación en tiempo real por chat (WebSocket), notificaciones globales y notas privadas internas.
+El alta de tickets es guiada (categoría y prioridad) y sugiere soluciones ya documentadas.
 
 ## 🛠️ Stack Tecnológico
 
