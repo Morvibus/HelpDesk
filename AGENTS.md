@@ -21,13 +21,15 @@ El `README.md` cubre uso y desarrollo; los comandos de abajo son todo lo que exi
   → frontend http://localhost:5173, API http://localhost:8000 (Swagger en `/docs`), Postgres en 5432.
 - Solo frontend: `cd frontend && npm install && npm run dev`
 - Verificación del frontend (las únicas checks que existen, en este orden):
-  - `npm run lint` — oxlint **sin archivo de configuración**, así que usa reglas por defecto
+  - `npm run lint` — oxlint con `frontend/.oxlintrc.json` (plugins react/react_perf/react_hooks;
+    correctness = error, suspicious = warn); objetivo: 0 warnings
   - `npm run build`
-- Tests del backend (53 tests; requiere `db` levantado; usan la base `helpdesk_test`, nunca `helpdesk_db`):
+- Tests del backend (105 tests; requiere `db` levantado; usan la base `helpdesk_test`, nunca `helpdesk_db`):
   `docker compose run --rm backend python -m pytest`
   Usa `python -m pytest` (no `pytest`) para que `/app` entre en `sys.path`; un solo test:
   `docker compose run --rm backend python -m pytest tests/test_auth.py::test_login_form_encoded`.
-  Estructura: `backend/tests/` (auth, permisos, upload, websockets, paginación, migraciones).
+  Estructura: `backend/tests/` (auth, permisos, upload, websockets, paginación, migraciones,
+  biblioteca, alta de tickets).
 - Migraciones (Alembic): se aplican solas al arrancar (`entrypoint.sh` → `alembic upgrade head`).
   Al cambiar modelos: `docker compose run --rm backend alembic revision --autogenerate -m "qué cambia"`
   → revisar el diff en `backend/alembic/versions/` → commit. Validación:

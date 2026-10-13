@@ -56,7 +56,7 @@ El login usa el correo electrónico; el endpoint `POST /login` recibe datos
 cd frontend
 npm install
 npm run dev        # servidor en :5173
-npm run lint       # oxlint (sin configuración, reglas por defecto)
+npm run lint       # oxlint (config en .oxlintrc.json)
 npm run build      # build de producción
 
 # Backend fuera de Docker: requiere apuntar la DB a localhost
@@ -65,12 +65,16 @@ set DATABASE_URL=postgresql://helpdesk_user:helpdesk_password@localhost:5432/hel
 uvicorn main:app --reload
 ```
 
-**Sin tests ni CI en el repo:** la verificación real del frontend es `npm run lint` + `npm run build`,
-y del backend la revisión manual vía Swagger (`/docs`).
+**Verificación (sin CI):** frontend con `npm run lint` + `npm run build`; backend con pytest
+(requiere `db` levantado, usa la base `helpdesk_test`):
 
-> ⚠️ El esquema de la base de datos se crea con `create_all` al arrancar el backend.
-> Cambios en los modelos **no** migran tablas existentes: recrear el volumen
-> (`docker compose down -v`, borra datos) o aplicar SQL manual.
+```bash
+docker compose run --rm backend python -m pytest
+```
+
+> El esquema lo gestiona **Alembic**: las migraciones se aplican solas al arrancar el backend.
+> Al cambiar modelos: `docker compose run --rm backend alembic revision --autogenerate -m "qué cambia"`,
+> revisar el archivo generado en `backend/alembic/versions/` y commitearlo.
 
 ## 📂 Estructura
 
