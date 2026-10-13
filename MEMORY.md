@@ -5,27 +5,26 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 
 ## Estado actual (2026-10-13)
 
-- Pusheado hasta `origin/main` = `1c9c5ea` (responsive, asignaciones, vista admin, admin potenciado
-  y horas hábiles). La tanda de tickets huérfanos (esta sesión) quedó **sin pushear**.
-- Fase 3: Alembic (`4abf7e7a664b` con guards) + entrypoint + paginación `{items,total}`. 53 tests.
-- Frontend F1-F3 + F5: interceptor 401, error boundary, reconexión WS, initTheme, `/metrics/` por
-  rol (KPIs del Dashboard = única fuente). `.oxlintrc.json`: 0 warnings.
-- Responsive R1+R2 + Asignaciones: navbar móvil OK, chat `h-[55vh] min-h-[400px] lg:h-[600px]`,
-  tablero a 2 columnas (En Proceso incluye `assigned` legacy). (187b19d, 0dc2790, f5c8fe6, f488619)
-- Vista admin: `PATCH /users/{id}` (rol/is_active, anti-lockout), login/get_current_user con
-  `is_active`, `AdminPanel.jsx` + ruta /admin. 61 tests. (ead4605, 22556fb, 2578856)
-- Admin potenciado: `AdminPanel.jsx` en 3 pestañas (Usuarios · Tickets · Rendimiento); editar
-  nombre/correo; filtros `status`/`priority` en `GET /tickets/`; reasignar tickets; promedio de
-  resolución por técnico en `/metrics/`. (1fb3703, 73f84b0, eb1d0d7)
-- **Horas hábiles**: `/metrics/` agrega
-  `average_resolution_business_hours` y `avg_resolution_by_technician_business`;
-  `TicketResponse.business_age_hours` por ticket; el panel admin mide resolución y antigüedad en
-  horas hábiles (con el calendario como referencia). Backend: 75 tests en verde. Frontend: lint 0 +
-  build OK + módulo servido verificado.
+- `origin/main` = `7aa951f` (responsive, asignaciones, vista admin, admin potenciado y horas hábiles).
+  **Sin pushear**: tickets huérfanos (3 commits `adaabe3`/`4461f53`/`0de12b3`) + mejora de
+  notificaciones (esta sesión).
+- Fase 3: Alembic (`4abf7e7a664b` con guards) + entrypoint + paginación `{items,total}`.
+- Base ya pusheada: Frontend F1-F5 (interceptor 401, error boundary, reconexión WS, initTheme,
+  `/metrics/` por rol, `.oxlintrc.json` 0 warnings), responsive (navbar móvil, chat
+  `h-[55vh] min-h-[400px] lg:h-[600px]`, tablero 2 columnas), vista admin (`PATCH /users/{id}`
+  con anti-lockout, `AdminPanel.jsx` + ruta /admin) y admin potenciado (3 pestañas: Usuarios ·
+  Tickets · Rendimiento, editar nombre/correo, filtros `status`/`priority`, reasignar tickets).
+- **Horas hábiles**: `/metrics/` agrega `average_resolution_business_hours` y
+  `avg_resolution_by_technician_business`; `TicketResponse.business_age_hours` por ticket; el panel
+  admin mide en horas hábiles (con el calendario como referencia).
 - **Tickets huérfanos (sin pushear)**: al desactivar o degradar a `employee`, los tickets abiertos
   del usuario se reasignan (`reassign_to`) o vuelven al pool; los `in_process` se conservan como
   "ya iniciado" (badge ámbar + fijados arriba); `solved/closed` intactos. Filtro `assigned_to` en
   `GET /tickets/`. Modal `OrphanTicketsModal`. 81 tests; lint 0 + build OK.
+- **Notificaciones (sin commitear)**: `notify_ticket_message` reparte el aviso del chat recorriendo
+  las conexiones una sola vez; los admins reciben TODOS los mensajes y un público también llega al
+  asignado. WS + `Toaster` viven en `NotificationsHub` (montado en `App`, no por página) → no se
+  pierden avisos al navegar. Badge de no leídos en la navbar. 87 tests; lint 0 + build OK.
 
 ## Decisiones (y por qué)
 
@@ -55,6 +54,11 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 - "Ya iniciado sin asignar" es derivado (`status == in_process && assigned_to == null`): badge ámbar
   y se fija arriba en la columna En Proceso; NO se muta la `priority` guardada.
 - "En Proceso" (columna y KPI) incluye `assigned` legacy; no se migran datos.
+- Avisos de chat: `notify_ticket_message` decide destinatarios en UNA sola pasada (evita duplicados
+  si el asignado además es admin). Privada → técnicos+admins (nunca empleados). Pública → creador +
+  asignado + (técnicos si no hay asignado) + admins. `notify_techs`/`notify_user` siguen para el resto.
+- El WS de notificaciones salió de `Layout` (se remontaba por página y perdía avisos al navegar):
+  ahora es un hub único en `App`. El badge de la navbar cuenta `unreadTickets` (solo `new_message`).
 - oxlint: off en `react-in-jsx-scope` / `set-state-in-effect` / `react-hooks/exhaustive-deps`;
   `react/exhaustive-effect-dependencies` warn con disables comentados en deps intencionales.
 - Reconexión WS 1s→15s; 401 global → logout; `initTheme()` en `main.jsx` antes del render.
