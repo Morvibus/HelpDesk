@@ -5,8 +5,8 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 
 ## Estado actual (2026-10-13)
 
-- Todo pusheado: `origin/main` = `1c9c5ea` (responsive, asignaciones, vista admin, admin
-  potenciado y horas hábiles). El árbol queda limpio.
+- Pusheado hasta `origin/main` = `1c9c5ea` (responsive, asignaciones, vista admin, admin potenciado
+  y horas hábiles). La tanda de tickets huérfanos (esta sesión) quedó **sin pushear**.
 - Fase 3: Alembic (`4abf7e7a664b` con guards) + entrypoint + paginación `{items,total}`. 53 tests.
 - Frontend F1-F3 + F5: interceptor 401, error boundary, reconexión WS, initTheme, `/metrics/` por
   rol (KPIs del Dashboard = única fuente). `.oxlintrc.json`: 0 warnings.
@@ -22,6 +22,10 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   `TicketResponse.business_age_hours` por ticket; el panel admin mide resolución y antigüedad en
   horas hábiles (con el calendario como referencia). Backend: 75 tests en verde. Frontend: lint 0 +
   build OK + módulo servido verificado.
+- **Tickets huérfanos (sin pushear)**: al desactivar o degradar a `employee`, los tickets abiertos
+  del usuario se reasignan (`reassign_to`) o vuelven al pool; los `in_process` se conservan como
+  "ya iniciado" (badge ámbar + fijados arriba); `solved/closed` intactos. Filtro `assigned_to` en
+  `GET /tickets/`. Modal `OrphanTicketsModal`. 81 tests; lint 0 + build OK.
 
 ## Decisiones (y por qué)
 
@@ -30,12 +34,12 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   login y JWT al instante. También edita `name`/`email`: unicidad de correo excluyendo al propio
   (400 si choca). Cambiar el correo no invalida el JWT del otro (el token no lleva email).
 - Admin = pestañas dentro de `/admin` (una página, sin rutas extra).
-- Filtros `status`/`priority` en `GET /tickets/` siempre DESPUÉS de la visibilidad por rol.
+- Filtros `status`/`priority`/`assigned_to` en `GET /tickets/` siempre DESPUÉS de la visibilidad por rol.
 - Reasignar (admin) usa `PATCH /tickets/{id}` con `assigned_to`; en un `created` queda `assigned`
   y se ve en "En Proceso" vía filtro legacy hasta que el técnico lo atienda.
 - Nombres en tablas admin se resuelven en frontend con `GET /users/` (página solo-admin; no se toca
   `TicketResponse`).
-- Semáforo de antigüedad: umbrales por prioridad (urgente 24 / alta 48 / media 72 / baja 120 h);
+- Semáforo de antigüedad en HORAS HÁBILES (urgente 10 / alta 20 / media 30 / baja 48);
   rojo > umbral, ámbar > mitad, verde <= mitad.
 - Horas hábiles: helper `business_hours_between` en `main.py` es la única fuente (el frontend NO
   duplica la lógica: consume `business_age_hours`). Zona `UTC-6` fija; jornada lun-vie 07:30-17:00
@@ -43,8 +47,13 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   se asumen UTC. El sábado cuenta: un ticket de viernes a lunes acumula el medio día del sábado.
 - Métricas de resolución: se conservan las de calendario y se agregan las hábiles
   (`average_resolution_business_hours`, `avg_resolution_by_technician_business`); admin muestra la
-  hábil como principal y la calendario como referencia. El semáforo pasa a horas HÁBILES
-  (urgente 10 / alta 20 / media 30 / baja 48).
+  hábil como principal y la calendario como referencia.
+- Tickets huérfanos: al desactivar o degradar a `employee` (`PATCH /users/{id}`), los tickets
+  ABIERTOS del usuario se reasignan a un técnico/admin activo (`reassign_to`) o vuelven al pool
+  (sin `reassign_to`). Nunca se tocan `solved/closed` (ahí vive la atribución de las métricas).
+  Dispara solo si `is_active→false` o `role→employee`. `in_process` se conserva (ya iniciado).
+- "Ya iniciado sin asignar" es derivado (`status == in_process && assigned_to == null`): badge ámbar
+  y se fija arriba en la columna En Proceso; NO se muta la `priority` guardada.
 - "En Proceso" (columna y KPI) incluye `assigned` legacy; no se migran datos.
 - oxlint: off en `react-in-jsx-scope` / `set-state-in-effect` / `react-hooks/exhaustive-deps`;
   `react/exhaustive-effect-dependencies` warn con disables comentados en deps intencionales.
