@@ -126,6 +126,75 @@ def test_socket_muerto_no_rompe_el_envio():
     assert n.active_connections[7] == [{"ws": vivo, "role": "employee"}]  # el muerto quedó fuera
 
 
+# --- NotificationManager: reparto de mensajes de chat ---
+
+def _conectar(n, uid, role):
+    ws = FakeWS()
+    asyncio.run(n.connect(ws, uid, role))
+    return ws
+
+
+def test_mensaje_publico_incluye_creador_asignado_y_admins():
+    n = NotificationManager()
+    empleado = _conectar(n, 1, "employee")     # creador
+    asignado = _conectar(n, 2, "technician")   # asignado
+    otro_tecnico = _conectar(n, 3, "technician")
+    admin = _conectar(n, 4, "admin")
+
+    asyncio.run(n.notify_ticket_message(1, 2, "T", "M"))
+
+    assert len(empleado.enviados) == 1
+    assert len(asignado.enviados) == 1
+    assert len(admin.enviados) == 1
+    assert otro_tecnico.enviados == []  # no es creador ni asignado
+
+
+def test_mensaje_publico_sin_asignado_avisa_a_todo_el_staff():
+    n = NotificationManager()
+    empleado = _conectar(n, 1, "employee")
+    tecnico = _conectar(n, 2, "technician")
+    admin = _conectar(n, 3, "admin")
+
+    asyncio.run(n.notify_ticket_message(1, None, "T", "M"))
+
+    assert len(empleado.enviados) == 1
+    assert len(tecnico.enviados) == 1
+    assert len(admin.enviados) == 1
+
+
+def test_nota_privada_no_llega_a_los_empleados():
+    n = NotificationManager()
+    empleado = _conectar(n, 1, "employee")     # creador
+    tecnico = _conectar(n, 2, "technician")
+    admin = _conectar(n, 3, "admin")
+
+    asyncio.run(n.notify_ticket_message(1, 2, "T", "M", is_private=True))
+
+    assert empleado.enviados == []  # la nota privada jamás llega al empleado
+    assert len(tecnico.enviados) == 1
+    assert len(admin.enviados) == 1
+
+
+def test_mensaje_excluye_al_emisor():
+    n = NotificationManager()
+    empleado = _conectar(n, 1, "employee")
+    tecnico = _conectar(n, 2, "technician")
+
+    asyncio.run(n.notify_ticket_message(1, 2, "T", "M", exclude_user_id=1))
+
+    assert empleado.enviados == []
+    assert len(tecnico.enviados) == 1
+
+
+def test_asignado_que_es_admin_no_recibe_duplicado():
+    n = NotificationManager()
+    admin = _conectar(n, 2, "admin")  # es el asignado y además admin
+
+    asyncio.run(n.notify_ticket_message(1, 2, "T", "M"))
+
+    assert len(admin.enviados) == 1  # una sola vez, no dos
+
+
 # --- ConnectionManager: notas privadas y sockets muertos ---
 
 def test_broadcast_filtra_notas_privadas_de_los_empleados():
@@ -233,3 +302,21 @@ def test_multitab_notificaciones_reciben_las_dos_pestanas(client, db):
         chat.send_json({"content": "mensaje 2", "is_private_note": False})
         assert chat.receive_json()["content"] == "mensaje 2"
         assert p2.receive_json()["message"] == "mensaje 2"  # la otra sigue viva
+
+
+def test_admin_recibe_mensaje_publico_de_ticket_asignado(client, db):
+    """Mejora de notificaciones: el admin ve los mensajes aunque el ticket esté asignado a otro."""
+    empleado = create_user(db, "employee")
+    tecnico = create_user(db, "technician")
+    admin = create_user(db, "admin")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+
+    with (
+        client.websocket_connect(
+            f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(empleado)]
+        ) as chat,
+        client.websocket_connect("/ws/notifications", subprotocols=["auth", token_for(admin)]) as adminWs,
+    ):
+        chat.send_json({"content": "consulta al admin", "is_private_note": False})
+        assert chat.receive_json()["content"] == "consulta al admin"
+        assert adminWs.receive_json()["message"] == "consulta al admin"

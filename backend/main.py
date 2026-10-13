@@ -746,17 +746,25 @@ async def chat_websocket(
                 lambda: db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
             )
             msg_resumen = new_message.content[:30] + "..." if len(new_message.content) > 30 else new_message.content
-                    
-            if user_role == "employee":
-                if db_ticket.assigned_to:
-                    await notifier.notify_user(db_ticket.assigned_to, f"Nuevo mensaje (Ticket #{ticket_id})", msg_resumen, "💬", "new_message", ticket_id, exclude_user_id=user_id)
-                else:
-                    await notifier.notify_techs(f"Nuevo mensaje (Ticket #{ticket_id})", msg_resumen, "💬", "new_message", ticket_id, exclude_user_id=user_id)
+
+            if is_private:
+                titulo, icono = f"Nota Interna (Ticket #{ticket_id})", "🔒"
+            elif user_role == "employee":
+                titulo, icono = f"Nuevo mensaje (Ticket #{ticket_id})", "💬"
             else:
-                if is_private:
-                    await notifier.notify_techs(f"Nota Interna (Ticket #{ticket_id})", msg_resumen, "🔒", "new_message", ticket_id, exclude_user_id=user_id)
-                else:
-                    await notifier.notify_user(db_ticket.created_by, f"Soporte IT (Ticket #{ticket_id})", msg_resumen, "💬", "new_message", ticket_id, exclude_user_id=user_id)  
+                titulo, icono = f"Soporte IT (Ticket #{ticket_id})", "💬"
+
+            await notifier.notify_ticket_message(
+                db_ticket.created_by,
+                db_ticket.assigned_to,
+                titulo,
+                msg_resumen,
+                icono,
+                "new_message",
+                ticket_id,
+                exclude_user_id=user_id,
+                is_private=is_private,
+            )
             
     except WebSocketDisconnect:
         # El cliente cerró la pestaña
@@ -948,6 +956,46 @@ class NotificationManager:
                 continue
             for conn in list(conns):
                 if conn["role"] != "employee":
+                    await self._send_safe(uid, conn, payload)
+
+    async def notify_ticket_message(
+        self,
+        created_by: int,
+        assigned_to: int = None,
+        title: str = "",
+        message: str = "",
+        icon: str = "💬",
+        msg_type: str = "new_message",
+        ticket_id: int = None,
+        exclude_user_id: int = None,
+        is_private: bool = False,
+    ):
+        """Reparte el aviso de un mensaje de chat según su visibilidad.
+
+        Se recorre cada conexión una sola vez: así nadie recibe el aviso duplicado
+        aunque cumpla varios criterios (asignado que además es admin). Reglas:
+        - Nota privada: solo staff (técnicos y admins); JAMÁS un empleado.
+        - Mensaje público: creador + asignado + (técnicos si no hay asignado) + admins.
+        El emisor nunca se auto-notifica.
+        """
+        payload = {"type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id}
+        for uid, conns in list(self.active_connections.items()):
+            if uid == exclude_user_id:
+                continue
+            for conn in list(conns):
+                role = conn["role"]
+                if is_private:
+                    # La nota privada nunca debe llegar a un empleado
+                    if role in ("technician", "admin"):
+                        await self._send_safe(uid, conn, payload)
+                    continue
+                if uid == created_by:
+                    await self._send_safe(uid, conn, payload)
+                elif assigned_to is not None and uid == assigned_to:
+                    await self._send_safe(uid, conn, payload)
+                elif assigned_to is None and role in ("technician", "admin"):
+                    await self._send_safe(uid, conn, payload)
+                elif role == "admin":
                     await self._send_safe(uid, conn, payload)
 
 
