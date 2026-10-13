@@ -14,10 +14,14 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   tablero a 2 columnas (En Proceso incluye `assigned` legacy). (187b19d, 0dc2790, f5c8fe6, f488619)
 - Vista admin: `PATCH /users/{id}` (rol/is_active, anti-lockout), login/get_current_user con
   `is_active`, `AdminPanel.jsx` + ruta /admin. 61 tests. (ead4605, 22556fb, 2578856)
-- **Admin potenciado (esta sesión, sin commitear)**: `AdminPanel.jsx` en 3 pestañas (Usuarios ·
-  Tickets · Rendimiento); editar nombre/correo; filtros `status`/`priority` en `GET /tickets/`;
-  reasignar tickets; semáforo de antigüedad por prioridad; promedio de resolución por técnico en
-  `/metrics/`. Backend: 66 tests en verde. Frontend: lint 0 + build OK + módulo servido verificado.
+- **Admin potenciado (esta sesión)**: `AdminPanel.jsx` en 3 pestañas (Usuarios · Tickets ·
+  Rendimiento); editar nombre/correo; filtros `status`/`priority` en `GET /tickets/`; reasignar
+  tickets; promedio de resolución por técnico en `/metrics/`. (1fb3703, 73f84b0, eb1d0d7)
+- **Horas hábiles (esta sesión, sin commitear)**: `/metrics/` agrega
+  `average_resolution_business_hours` y `avg_resolution_by_technician_business`;
+  `TicketResponse.business_age_hours` por ticket; el panel admin mide resolución y antigüedad en
+  horas hábiles (con el calendario como referencia). Backend: 75 tests en verde. Frontend: lint 0 +
+  build OK + módulo servido verificado.
 
 ## Decisiones (y por qué)
 
@@ -33,6 +37,14 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
   `TicketResponse`).
 - Semáforo de antigüedad: umbrales por prioridad (urgente 24 / alta 48 / media 72 / baja 120 h);
   rojo > umbral, ámbar > mitad, verde <= mitad.
+- Horas hábiles: helper `business_hours_between` en `main.py` es la única fuente (el frontend NO
+  duplica la lógica: consume `business_age_hours`). Zona `UTC-6` fija; jornada lun-vie 07:30-17:00
+  (9.5 h) y sáb 07:30-12:00 (4.5 h); domingo 0. Los timestamps de Postgres (DateTime plano, naive)
+  se asumen UTC. El sábado cuenta: un ticket de viernes a lunes acumula el medio día del sábado.
+- Métricas de resolución: se conservan las de calendario y se agregan las hábiles
+  (`average_resolution_business_hours`, `avg_resolution_by_technician_business`); admin muestra la
+  hábil como principal y la calendario como referencia. El semáforo pasa a horas HÁBILES
+  (urgente 10 / alta 20 / media 30 / baja 48).
 - "En Proceso" (columna y KPI) incluye `assigned` legacy; no se migran datos.
 - oxlint: off en `react-in-jsx-scope` / `set-state-in-effect` / `react-hooks/exhaustive-deps`;
   `react/exhaustive-effect-dependencies` warn con disables comentados en deps intencionales.
@@ -57,5 +69,5 @@ Regla permanente → proponer moverla a `AGENTS.md`. Nunca guardar claves, token
 ## Próximos pasos
 
 - Vigilar httpx → httpx2 cuando Starlette quite el soporte a httpx en testclient.
-- Push de los commits locales (responsive + asignaciones + vista admin + admin potenciado) cuando el
-  usuario lo indique.
+- Push de los commits locales (responsive + asignaciones + vista admin + admin potenciado + horas
+  hábiles) cuando el usuario lo indique.
