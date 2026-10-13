@@ -17,8 +17,10 @@ const getPriorityBadge = (priority) => {
 const TicketCard = ({ ticket }) => {
     const navigate = useNavigate()
     const unreadTickets = useUIStore(state => state.unreadTickets)
+    // Ticket ya iniciado que volvió al pool (sin responsable): se resalta y se prioriza
+    const retomar = ticket.status === 'in_process' && ticket.assigned_to == null
     return (
-        <div onClick={() => navigate(`/ticket/${ticket.id}`)} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md hover:border-brand-primary dark:hover:border-brand-light transition-all cursor-pointer group relative">
+        <div onClick={() => navigate(`/ticket/${ticket.id}`)} className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border hover:shadow-md hover:border-brand-primary dark:hover:border-brand-light transition-all cursor-pointer group relative ${retomar ? 'border-amber-300 dark:border-amber-700/60 ring-2 ring-amber-400/70 dark:ring-amber-500/40' : 'border-gray-100 dark:border-gray-700'}`}>
             {unreadTickets.includes(ticket.id) && (
                 <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -30,6 +32,11 @@ const TicketCard = ({ ticket }) => {
                 {getPriorityBadge(ticket.priority)}
             </div>
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-primary dark:group-hover:text-brand-light transition-colors line-clamp-2">{ticket.title}</h4>
+            {retomar && (
+                <span className="mt-2 inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded border border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50">
+                    Ya iniciado · sin asignar
+                </span>
+            )}
             <div className="mt-3 pt-3 border-t border-gray-50 dark:border-gray-700/50 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
                 <span>{new Date(ticket.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
                 {unreadTickets.includes(ticket.id) && <MessageSquare className="w-3.5 h-3.5 text-brand-primary animate-pulse" />}
@@ -116,7 +123,14 @@ export default function Dashboard() {
     const colCreated = tickets.filter(t => t.status === 'created')
     // Los tickets viejos en 'assigned' (datos de sesiones anteriores) se muestran
     // dentro de En Proceso: al tomar, un ticket nuevo ya va directo a in_process.
-    const colInProcess = tickets.filter(t => ['in_process', 'assigned'].includes(t.status))
+    // Los 'in_process' sin asignar (ya iniciados que volvieron al pool) se fijan arriba.
+    const colInProcess = tickets
+        .filter(t => ['in_process', 'assigned'].includes(t.status))
+        .sort((a, b) => {
+            const aRetomar = a.status === 'in_process' && a.assigned_to == null
+            const bRetomar = b.status === 'in_process' && b.assigned_to == null
+            return (bRetomar ? 1 : 0) - (aRetomar ? 1 : 0)
+        })
     const historyTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status))
 
     const getStatusBadge = (status) => {

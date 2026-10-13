@@ -368,6 +368,103 @@ const EditUserModal = ({ user, onClose, onUpdated }) => {
     )
 }
 
+// Modal "Tickets abiertos": al desactivar o degradar a un técnico sus tickets abiertos
+// quedarían sin atender. Permite reasignarlos a otro técnico o devolverlos al pool.
+const OrphanTicketsModal = ({ user, descripcion, abiertos, loading, onClose, onConfirm }) => {
+    const [techs, setTechs] = useState([])
+    const [destino, setDestino] = useState('')  // '' => volver al pool (sin asignar)
+    const [cargandoTechs, setCargandoTechs] = useState(true)
+
+    useEffect(() => {
+        const controller = new AbortController()
+        ;(async () => {
+            try {
+                const res = await api.get('/users/', { params: { limit: 200, offset: 0 }, signal: controller.signal })
+                setTechs(res.data.items.filter(u => u.is_active && u.id !== user.id && (u.role === 'technician' || u.role === 'admin')))
+            } catch (err) {
+                if (err.code !== 'ERR_CANCELED') toast.error('No se pudo cargar la lista de técnicos.')
+            } finally {
+                setCargandoTechs(false)
+            }
+        })()
+        return () => controller.abort()
+    }, [user.id])
+
+    const iniciados = abiertos.filter(t => t.status === 'in_process').length
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm transition-opacity">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Tickets abiertos de {user.name}</h2>
+                    <button onClick={onClose} aria-label="Cerrar modal" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors">
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <div className="px-6 py-5 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Al {descripcion}, <strong className="text-gray-900 dark:text-white">{abiertos.length} ticket(s) abierto(s)</strong> quedarían sin atender.{' '}
+                        {iniciados > 0 && (
+                            <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                                {iniciados} ya iniciado(s) se marcarán como tal y conviene priorizarlos.
+                            </span>
+                        )}
+                    </p>
+
+                    <ul className="max-h-44 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 border border-gray-100 dark:border-gray-800 rounded-lg">
+                        {abiertos.map(t => (
+                            <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                                <span className="text-gray-900 dark:text-white truncate">#{t.id} {t.title}</span>
+                                <span className="flex items-center gap-1.5 shrink-0">
+                                    {t.status === 'in_process' && (
+                                        <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">Ya iniciado</span>
+                                    )}
+                                    <StatusBadge status={t.status} />
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+
+                    <div>
+                        <label htmlFor="orphan-destino" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Destino de esos tickets</label>
+                        <select
+                            id="orphan-destino"
+                            value={destino}
+                            onChange={(e) => setDestino(e.target.value)}
+                            disabled={cargandoTechs}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-shadow disabled:opacity-50"
+                        >
+                            <option value="">Devolver al pool (sin asignar)</option>
+                            {techs.map(u => (
+                                <option key={u.id} value={u.id}>Reasignar a {u.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onConfirm(destino === '' ? null : Number(destino))}
+                            disabled={loading}
+                            className="px-5 py-2.5 text-sm font-medium text-white bg-brand-primary hover:bg-brand-dark rounded-lg flex items-center justify-center min-w-[120px] transition-colors disabled:opacity-70"
+                        >
+                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirmar'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // --- Pestañas ---
 
 // Pestaña 1: gestión de usuarios
@@ -383,6 +480,8 @@ const UsersTab = () => {
     const [createOpen, setCreateOpen] = useState(false)
     const [resetUser, setResetUser] = useState(null)
     const [editUser, setEditUser] = useState(null)
+    // { user, body, exito, descripcion, abiertos }: operación pendiente de decidir el destino de los tickets
+    const [orphan, setOrphan] = useState(null)
 
     // Carga inicial (una sola vez al montar)
     // oxlint-disable react/exhaustive-effect-dependencies -- la carga inicial es intencional
@@ -440,29 +539,56 @@ const UsersTab = () => {
         }
     }
 
-    const handleRoleChange = async (user, newRole) => {
+    // Aplica un cambio de usuario (rol/estado) y refresca la lista
+    const aplicarCambio = async (user, body, exito) => {
         setLoadingUserId(user.id)
         try {
-            await api.patch(`/users/${user.id}`, { role: newRole })
-            toast.success(`Rol de ${user.name} actualizado a ${ROLE_LABELS[newRole]}`)
+            await api.patch(`/users/${user.id}`, body)
+            toast.success(exito)
+            setOrphan(null)
             await reload()
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'Error al cambiar el rol')
+            toast.error(err.response?.data?.detail || 'Error al actualizar al usuario')
         } finally {
             setLoadingUserId(null)
         }
     }
 
-    const handleToggleActive = async (user) => {
+    // Antes de desactivar o degradar a empleado, revisa si el usuario tiene tickets abiertos:
+    // si los tiene, pide decidir el destino (reasignar o devolver al pool) antes de aplicar.
+    const solicitarCambio = async (user, body, exito, descripcion) => {
         setLoadingUserId(user.id)
         try {
-            await api.patch(`/users/${user.id}`, { is_active: !user.is_active })
-            toast.success(user.is_active ? `${user.name} fue desactivado` : `${user.name} fue activado`)
-            await reload()
-        } catch (err) {
-            toast.error(err.response?.data?.detail || 'Error al cambiar el estado')
-        } finally {
+            const res = await api.get('/tickets/', { params: { assigned_to: user.id, limit: 200, offset: 0 } })
+            const abiertos = res.data.items.filter(t => ['created', 'assigned', 'in_process'].includes(t.status))
             setLoadingUserId(null)
+            if (abiertos.length === 0) {
+                await aplicarCambio(user, body, exito)
+            } else {
+                setOrphan({ user, body, exito, descripcion, abiertos })
+            }
+        } catch {
+            setLoadingUserId(null)
+            toast.error('No se pudieron revisar los tickets del usuario.')
+        }
+    }
+
+    const handleRoleChange = (user, newRole) => {
+        const exito = `Rol de ${user.name} actualizado a ${ROLE_LABELS[newRole]}`
+        if (newRole === 'employee') {
+            // Degradar a empleado deja sus tickets asignados sin responsable
+            solicitarCambio(user, { role: newRole }, exito, 'cambiar el rol a Empleado')
+        } else {
+            aplicarCambio(user, { role: newRole }, exito)
+        }
+    }
+
+    const handleToggleActive = (user) => {
+        if (user.is_active) {
+            // Desactivar deja sus tickets abiertos sin responsable
+            solicitarCambio(user, { is_active: false }, `${user.name} fue desactivado`, 'desactivar la cuenta')
+        } else {
+            aplicarCambio(user, { is_active: true }, `${user.name} fue activado`)
         }
     }
 
@@ -473,6 +599,20 @@ const UsersTab = () => {
             <CreateUserModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => reload(1)} />
             <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} onUpdated={() => reload(0)} />
             {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} onUpdated={() => reload(0)} />}
+            {orphan && (
+                <OrphanTicketsModal
+                    user={orphan.user}
+                    descripcion={orphan.descripcion}
+                    abiertos={orphan.abiertos}
+                    loading={loadingUserId === orphan.user.id}
+                    onClose={() => setOrphan(null)}
+                    onConfirm={(reassignTo) => aplicarCambio(
+                        orphan.user,
+                        reassignTo != null ? { ...orphan.body, reassign_to: reassignTo } : orphan.body,
+                        orphan.exito,
+                    )}
+                />
+            )}
 
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
@@ -794,6 +934,11 @@ const TicketsTab = () => {
                                                         #{t.id}
                                                     </Link>
                                                     <p className="text-sm text-gray-900 dark:text-white truncate max-w-[220px]">{t.title}</p>
+                                                    {t.status === 'in_process' && t.assigned_to == null && (
+                                                        <span className="inline-flex items-center mt-1 px-2 py-0.5 text-[10px] font-bold uppercase rounded border border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50">
+                                                            Ya iniciado · sin asignar
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4"><PriorityBadge priority={t.priority} /></td>
                                                 <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
