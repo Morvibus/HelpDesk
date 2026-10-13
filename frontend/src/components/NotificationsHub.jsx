@@ -89,7 +89,8 @@ export default function NotificationsHub() {
         <Toaster
             position="top-right"
             toastOptions={{
-                className: 'dark:bg-gray-800 dark:text-white border border-gray-200 dark:border-gray-700 shadow-lg'
+                // Con `!` porque la librería fija fondo/color con estilo inline
+                className: '!bg-white dark:!bg-gray-900 !text-gray-900 dark:!text-gray-50 !border !border-gray-200 dark:!border-gray-700 !shadow-lg'
             }}
         />
     )

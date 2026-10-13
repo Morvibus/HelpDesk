@@ -22,7 +22,7 @@ export default function Layout({ children }) {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-brand-black transition-colors duration-200">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
 
             {/* Barra de Navegación */}
             <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -65,7 +65,7 @@ export default function Layout({ children }) {
                                     onClick={openTicketModal}
                                     aria-label="Nuevo Ticket"
                                     title="Nuevo Ticket"
-                                    className="inline-flex items-center px-2 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-dark dark:bg-brand-light dark:hover:bg-brand-primary dark:text-gray-900 transition-colors"
+                                    className="inline-flex items-center px-2 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-dark dark:bg-brand-light dark:hover:bg-brand-light-hover dark:text-gray-900 transition-colors"
                                 >
                                     <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" />
                                     <span className="hidden sm:inline">Nuevo Ticket</span>
@@ -77,7 +77,7 @@ export default function Layout({ children }) {
                                 <button
                                     onClick={toggleTheme}
                                     aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-                                    className="p-2 text-gray-400 hover:text-brand-accent dark:hover:text-brand-light transition-colors"
+                                    className="p-2 text-gray-400 hover:text-brand-primary dark:hover:text-brand-light transition-colors"
                                 >
                                     {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                                 </button>
@@ -88,7 +88,7 @@ export default function Layout({ children }) {
                                 </div>
 
                                 {/* Avatar */}
-                                <Avatar size={32} name={email || "usuario"} variant="beam" />
+                                <Avatar size={32} name={email || "usuario"} variant="beam" colors={['#0d7c73', '#2dd4bf', '#d97706', '#4a5b62', '#151c22']} />
                                 <span className="hidden md:block max-w-[180px] truncate">{email}</span>
 
                                 {/* Botón Salir */}

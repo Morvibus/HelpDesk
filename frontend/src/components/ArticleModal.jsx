@@ -86,7 +86,7 @@ export default function ArticleModal({ onClose, onSaved, article = null, ticket 
                             required
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                             placeholder="Ej: La impresora no responde"
                         />
                     </div>
@@ -97,7 +97,7 @@ export default function ArticleModal({ onClose, onSaved, article = null, ticket 
                             id="article-category"
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                         >
                             {CATEGORIAS.map((c) => (
                                 <option key={c.value} value={c.value}>{c.label}</option>
@@ -113,7 +113,7 @@ export default function ArticleModal({ onClose, onSaved, article = null, ticket 
                             rows="3"
                             value={problem}
                             onChange={(e) => setProblem(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow resize-none"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow resize-none"
                             placeholder="Qué le pasaba al usuario..."
                         ></textarea>
                     </div>
@@ -126,7 +126,7 @@ export default function ArticleModal({ onClose, onSaved, article = null, ticket 
                             rows="4"
                             value={solution}
                             onChange={(e) => setSolution(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow resize-none"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow resize-none"
                             placeholder="Pasos que resolvieron el problema..."
                         ></textarea>
                     </div>

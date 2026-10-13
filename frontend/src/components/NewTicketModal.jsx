@@ -167,7 +167,7 @@ export default function NewTicketModal() {
                                 required
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                                 placeholder="Ej: No puedo imprimir"
                             />
                         </div>
@@ -198,7 +198,7 @@ export default function NewTicketModal() {
                                 rows="4"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow resize-none"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow resize-none"
                                 placeholder="¿Qué estabas haciendo y qué apareció?"
                             ></textarea>
                         </div>

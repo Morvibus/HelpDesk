@@ -293,7 +293,7 @@ export default function TicketDetail() {
                                     )}
 
                                     {(['assigned', 'in_process'].includes(ticket.status) && !(ticket.status === 'in_process' && ticket.assigned_to == null)) && (
-                                        <button onClick={() => handleStatusChange('solved')} disabled={actionLoading} className="w-full flex justify-center items-center px-4 py-2 bg-brand-light text-white hover:bg-green-600 rounded-lg transition-colors text-sm font-medium">
+                                        <button onClick={() => handleStatusChange('solved')} disabled={actionLoading} className="w-full flex justify-center items-center px-4 py-2 bg-brand-primary text-white hover:bg-brand-dark rounded-lg transition-colors text-sm font-medium">
                                             <CheckCircle2 className="w-4 h-4 mr-2" /> Marcar como Solucionado
                                         </button>
                                     )}
@@ -413,7 +413,7 @@ export default function TicketDetail() {
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     disabled={isTicketClosed}
-                                    className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:text-white transition-colors disabled:opacity-50"
+                                    className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:text-white transition-colors disabled:opacity-50"
                                     placeholder={isTicketClosed ? 'Ticket cerrado.' : wsAbierto ? 'Escribe un mensaje...' : 'Conectando al chat...'}
                                 />
                                 <button type="submit" disabled={!newMessage.trim() || isTicketClosed || !wsAbierto} title={wsAbierto ? 'Enviar mensaje' : 'Conectando al chat…'} className="px-4 py-2 bg-brand-primary text-white rounded-lg disabled:opacity-50 hover:bg-brand-dark transition-colors">
@@ -429,7 +429,7 @@ export default function TicketDetail() {
                                         id="private_note"
                                         checked={isPrivateNote}
                                         onChange={(e) => setIsPrivateNote(e.target.checked)}
-                                        className="w-4 h-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
+                                        className="w-4 h-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary dark:focus:ring-brand-light"
                                     />
                                     <label htmlFor="private_note" className="ml-2 flex items-center text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
                                         <Lock className="w-3 h-3 mr-1" /> Marcar como Nota Privada (El empleado no la verá)

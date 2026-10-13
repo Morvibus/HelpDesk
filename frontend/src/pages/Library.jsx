@@ -137,13 +137,13 @@ export default function Library() {
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                         placeholder="Buscar por problema o solución..."
-                        className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:text-white transition-colors"
+                        className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:text-white transition-colors"
                     />
                 </div>
                 <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:text-white transition-colors"
+                    className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:text-white transition-colors"
                 >
                     <option value="">Todas las categorías</option>
                     {CATEGORIAS.map((c) => (
@@ -154,7 +154,7 @@ export default function Library() {
 
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20">
-                    <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin mb-4"></div>
+                    <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary dark:border-brand-light/30 dark:border-t-brand-light rounded-full animate-spin mb-4"></div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Cargando biblioteca...</p>
                 </div>
             ) : articles.length === 0 ? (

@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 // --- Componentes de tablero a nivel de módulo (no se redefinen por render) ---
 
 const getPriorityBadge = (priority) => {
-    const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30' }
+    const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800 dark:text-gray-400', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 dark:text-yellow-400', high: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400' }
     const labels = { low: 'Baja', medium: 'Media', high: 'Alta' }
     return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${styles[priority] || ''}`}>{labels[priority] || priority}</span>
 }
@@ -39,7 +39,7 @@ const TicketCard = ({ ticket }) => {
             )}
             <div className="mt-3 pt-3 border-t border-gray-50 dark:border-gray-700/50 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
                 <span>{new Date(ticket.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
-                {unreadTickets.includes(ticket.id) && <MessageSquare className="w-3.5 h-3.5 text-brand-primary animate-pulse" />}
+                {unreadTickets.includes(ticket.id) && <MessageSquare className="w-3.5 h-3.5 text-brand-primary dark:text-brand-light animate-pulse" />}
             </div>
         </div>
     )
@@ -134,7 +134,7 @@ export default function Dashboard() {
     const historyTickets = tickets.filter(t => ['solved', 'closed'].includes(t.status))
 
     const getStatusBadge = (status) => {
-        const styles = { solved: 'bg-brand-light/10 text-brand-primary dark:bg-brand-light/20 dark:text-brand-light border-brand-light/30', closed: 'bg-brand-dark text-white dark:bg-brand-black dark:border-gray-700' }
+        const styles = { solved: 'bg-brand-light/10 text-brand-primary dark:bg-brand-light/20 dark:text-brand-light border-brand-light/30', closed: 'bg-brand-dark text-white dark:bg-gray-800 dark:border-gray-700' }
         const labels = { solved: 'Solucionado', closed: 'Cerrado' }
         return <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full border ${styles[status]}`}>{labels[status]}</span>
     }
@@ -186,14 +186,14 @@ export default function Dashboard() {
 
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20">
-                    <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin mb-4"></div>
+                    <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary dark:border-brand-light/30 dark:border-t-brand-light rounded-full animate-spin mb-4"></div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Cargando tablero...</p>
                 </div>
             ) : activeTab === 'board' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-gray-50/50 dark:bg-gray-900/30 rounded-2xl p-4 border border-dashed border-gray-200 dark:border-gray-800 flex flex-col h-full">
                         <div className="flex justify-between items-center mb-4 px-1">
-                            <h3 className="font-semibold text-gray-700 dark:text-gray-300 flex items-center"><span className="w-2 h-2 rounded-full bg-blue-400 mr-2"></span> Nuevos</h3>
+                            <h3 className="font-semibold text-gray-700 dark:text-gray-300 flex items-center"><span className="w-2 h-2 rounded-full bg-brand-accent mr-2"></span> Nuevos</h3>
                             <span className="bg-gray-200 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 text-xs font-bold px-2 py-0.5 rounded-full">{colCreated.length}</span>
                         </div>
                         <div className="space-y-3 flex-1">
@@ -237,7 +237,7 @@ export default function Dashboard() {
                                     {historyTickets.map((ticket) => (
                                         <tr key={ticket.id} onClick={() => navigate(`/ticket/${ticket.id}`)} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer group">
                                             <td className="px-6 py-4">
-                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-primary transition-colors">{ticket.title}</div>
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-primary dark:group-hover:text-brand-light transition-colors">{ticket.title}</div>
                                                 <div className="text-xs text-gray-400 mt-0.5">#{ticket.id}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(ticket.status)}</td>

@@ -115,7 +115,7 @@ const CreateUserModal = ({ open, onClose, onCreated }) => {
                             required
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                             placeholder="Nombre y apellido"
                         />
                     </div>
@@ -128,7 +128,7 @@ const CreateUserModal = ({ open, onClose, onCreated }) => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                             placeholder="usuario@helpdesk-mock.com"
                         />
                     </div>
@@ -142,7 +142,7 @@ const CreateUserModal = ({ open, onClose, onCreated }) => {
                             minLength={6}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                             placeholder="Mínimo 6 caracteres"
                         />
                     </div>
@@ -153,7 +153,7 @@ const CreateUserModal = ({ open, onClose, onCreated }) => {
                             id="user-role"
                             value={role}
                             onChange={(e) => setRole(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                         >
                             <option value="employee">Empleado</option>
                             <option value="technician">Técnico</option>
@@ -241,7 +241,7 @@ const ResetPasswordModal = ({ user, onClose, onUpdated }) => {
                                 required
                                 value={oldPassword}
                                 onChange={(e) => setOldPassword(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                             />
                         </div>
                     )}
@@ -255,7 +255,7 @@ const ResetPasswordModal = ({ user, onClose, onUpdated }) => {
                             minLength={6}
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                             placeholder="Mínimo 6 caracteres"
                         />
                     </div>
@@ -330,7 +330,7 @@ const EditUserModal = ({ user, onClose, onUpdated }) => {
                             required
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                         />
                     </div>
 
@@ -342,7 +342,7 @@ const EditUserModal = ({ user, onClose, onUpdated }) => {
                             required
                             value={userEmail}
                             onChange={(e) => setUserEmail(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:bg-gray-800 dark:text-white outline-none transition-shadow"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                         />
                     </div>
 
@@ -433,7 +433,7 @@ const OrphanTicketsModal = ({ user, descripcion, abiertos, loading, onClose, onC
                             value={destino}
                             onChange={(e) => setDestino(e.target.value)}
                             disabled={cargandoTechs}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-shadow disabled:opacity-50"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light outline-none transition-shadow disabled:opacity-50"
                         >
                             <option value="">Devolver al pool (sin asignar)</option>
                             {techs.map(u => (
@@ -634,7 +634,7 @@ const UsersTab = () => {
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                        <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin mb-4"></div>
+                        <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary dark:border-brand-light/30 dark:border-t-brand-light rounded-full animate-spin mb-4"></div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Cargando usuarios...</p>
                     </div>
                 ) : users.length === 0 ? (
@@ -684,7 +684,7 @@ const UsersTab = () => {
                                                         onChange={(e) => handleRoleChange(user, e.target.value)}
                                                         title={propio ? 'No puedes modificar tu propio rol' : undefined}
                                                         aria-label={`Cambiar rol de ${user.name}`}
-                                                        className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light outline-none transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         <option value="employee">Empleado</option>
                                                         <option value="technician">Técnico</option>
@@ -856,7 +856,7 @@ const TicketsTab = () => {
         }
     }
 
-    const filterSelectClass = "px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-shadow"
+    const filterSelectClass = "px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light outline-none transition-shadow"
 
     return (
         <>
@@ -900,7 +900,7 @@ const TicketsTab = () => {
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                        <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin mb-4"></div>
+                        <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary dark:border-brand-light/30 dark:border-t-brand-light rounded-full animate-spin mb-4"></div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Cargando tickets...</p>
                     </div>
                 ) : tickets.length === 0 ? (
@@ -955,7 +955,7 @@ const TicketsTab = () => {
                                                             onChange={(e) => handleReassign(t.id, e.target.value)}
                                                             title={cerrado ? 'No se puede reasignar un ticket cerrado' : `Reasignar ticket #${t.id}`}
                                                             aria-label={`Reasignar ticket #${t.id}`}
-                                                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light outline-none transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
                                                             <option value="" disabled>Sin asignar</option>
                                                             {candidateTechs.map(u => (
@@ -1034,7 +1034,7 @@ const PerformanceTab = () => {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin mb-4"></div>
+                <div className="w-8 h-8 border-4 border-brand-primary/30 border-t-brand-primary dark:border-brand-light/30 dark:border-t-brand-light rounded-full animate-spin mb-4"></div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Cargando rendimiento...</p>
             </div>
         )
