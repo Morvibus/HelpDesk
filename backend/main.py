@@ -251,6 +251,7 @@ def get_users(
 def update_user(
     user_id: int,
     user_update: schemas.UserUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -272,6 +273,40 @@ def update_user(
                 detail="No puedes desactivarte ni quitarte el rol de administrador a ti mismo",
             )
 
+    # Estado resultante: si se desactiva o se degrada a empleado, sus tickets abiertos quedarían
+    # sin nadie que los atienda (los técnicos solo ven los no asignados + los propios).
+    role_resultante = user_update.role if user_update.role is not None else user.role
+    activo_resultante = user_update.is_active if user_update.is_active is not None else user.is_active
+    queda_huerfano = (not activo_resultante) or (role_resultante == models.RoleEnum.employee)
+
+    tickets_afectados = []
+    if queda_huerfano:
+        tickets_afectados = (
+            db.query(models.Ticket).filter(
+                models.Ticket.assigned_to == user_id,
+                models.Ticket.status.in_([
+                    models.StatusEnum.created,
+                    models.StatusEnum.assigned,
+                    models.StatusEnum.in_process,
+                ]),
+            ).all()
+        )
+
+    # Validación temprana del destino (antes de mutar): técnico/admin activo y distinto del afectado
+    reassign_to = user_update.reassign_to
+    if reassign_to is not None and tickets_afectados:
+        destino = db.query(models.User).filter(models.User.id == reassign_to).first()
+        if (
+            destino is None
+            or not destino.is_active
+            or destino.role not in (models.RoleEnum.technician, models.RoleEnum.admin)
+            or destino.id == user_id
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="El técnico destino de la reasignación no es válido",
+            )
+
     if user_update.role is not None:
         user.role = user_update.role
     if user_update.is_active is not None:
@@ -289,8 +324,46 @@ def update_user(
             raise HTTPException(status_code=400, detail="El correo ya está registrado")
         user.email = user_update.email
 
+    # Tickets abiertos: reasignar al técnico destino, o devolverlos al pool (sin asignar).
+    # Los 'in_process' se conservan (señalan que ya estaban iniciados); el resto vuelve a 'created'.
+    # Nunca se tocan solved/closed: ahí vive la atribución histórica de las métricas.
+    for t in tickets_afectados:
+        anterior = t.assigned_to
+        if reassign_to is not None:
+            t.assigned_to = reassign_to
+            if t.status == models.StatusEnum.created:
+                t.status = models.StatusEnum.assigned
+        else:
+            t.assigned_to = None
+            if t.status != models.StatusEnum.in_process:
+                t.status = models.StatusEnum.created
+        db.add(models.TicketHistory(
+            ticket_id=t.id,
+            action=models.ActionEnum.status_change,
+            changed_by=current_user.id,
+            old_value=str(anterior),
+            new_value=str(t.assigned_to),
+        ))
+
     db.commit()
     db.refresh(user)
+
+    # Aviso a los técnicos para que refresquen el tablero (los recién liberados aparecen sin asignar)
+    if tickets_afectados:
+        if reassign_to is not None:
+            mensaje = f"{len(tickets_afectados)} ticket(s) reasignado(s) de {user.name}"
+        else:
+            mensaje = f"{len(tickets_afectados)} ticket(s) de {user.name} volvieron al pool"
+        background_tasks.add_task(
+            notifier.notify_techs,
+            "Tickets actualizados",
+            mensaje,
+            "🔁",
+            "refresh",
+            None,
+            current_user.id,
+        )
+
     return user
 
 # modificar password de un usuario (solo admin puede cambiar el password de otros usuarios)
@@ -329,6 +402,7 @@ def get_tickets(
     offset: int = Query(0, ge=0),
     status: Optional[models.StatusEnum] = Query(None),
     priority: Optional[models.PriorityEnum] = Query(None),
+    assigned_to: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user) # <- Requiere token válido
 ):
@@ -350,6 +424,8 @@ def get_tickets(
         query = query.filter(models.Ticket.status == status)
     if priority is not None:
         query = query.filter(models.Ticket.priority == priority)
+    if assigned_to is not None:
+        query = query.filter(models.Ticket.assigned_to == assigned_to)
 
     total = query.count()
     # Orden estable con id como desempate: así offset no salta/repite filas entre páginas

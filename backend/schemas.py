@@ -41,6 +41,9 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     role: Optional[RoleEnum] = None
     is_active: Optional[bool] = None
+    # Solo al desactivar o degradar a empleado: si tiene tickets abiertos, se reasignan
+    # a este técnico. Si se omite, esos tickets vuelven al pool (sin asignar).
+    reassign_to: Optional[int] = None
 
 # --- SCHEMAS DE TICKET ---
 class TicketCreate(BaseModel):

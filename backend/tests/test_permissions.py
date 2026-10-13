@@ -355,3 +355,127 @@ def test_get_tickets_incluye_antiguedad_en_horas_habiles(client, db):
     r = client.get("/tickets/", headers=auth_headers(admin))
     item = next(t for t in r.json()["items"] if t["id"] == ticket.id)
     assert item["business_age_hours"] == 2.5
+
+
+# --- Tickets huérfanos al desactivar o degradar a un técnico ---
+
+def test_desactivar_tecnico_devuelve_tickets_abiertos_al_pool(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+
+    t_asignado = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    t_asignado.status = models.StatusEnum.assigned
+    t_en_proceso = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    t_en_proceso.status = models.StatusEnum.in_process
+    t_resuelto = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    t_resuelto.status = models.StatusEnum.solved
+    db.commit()
+
+    r = client.patch(f"/users/{tecnico.id}", json={"is_active": False}, headers=auth_headers(admin))
+    assert r.status_code == 200
+    assert r.json()["is_active"] is False
+
+    db.expire_all()
+    # Los no iniciados vuelven al pool como 'created'
+    assert db.get(models.Ticket, t_asignado.id).assigned_to is None
+    assert db.get(models.Ticket, t_asignado.id).status == models.StatusEnum.created
+    # El que ya estaba iniciado conserva 'in_process' (marcador de "ya iniciado") y queda sin asignar
+    assert db.get(models.Ticket, t_en_proceso.id).assigned_to is None
+    assert db.get(models.Ticket, t_en_proceso.id).status == models.StatusEnum.in_process
+    # Los resueltos no se tocan (ahí vive la atribución de las métricas)
+    assert db.get(models.Ticket, t_resuelto.id).assigned_to == tecnico.id
+    assert db.get(models.Ticket, t_resuelto.id).status == models.StatusEnum.solved
+
+
+def test_degradar_tecnico_a_empleado_devuelve_al_pool(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    ticket.status = models.StatusEnum.in_process
+    db.commit()
+
+    r = client.patch(f"/users/{tecnico.id}", json={"role": "employee"}, headers=auth_headers(admin))
+    assert r.status_code == 200
+    assert r.json()["role"] == "employee"
+
+    db.expire_all()
+    actualizado = db.get(models.Ticket, ticket.id)
+    assert actualizado.assigned_to is None
+    assert actualizado.status == models.StatusEnum.in_process
+
+
+def test_reasignar_tickets_al_desactivar(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    relevo = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    ticket.status = models.StatusEnum.in_process
+    db.commit()
+
+    r = client.patch(
+        f"/users/{tecnico.id}",
+        json={"is_active": False, "reassign_to": relevo.id},
+        headers=auth_headers(admin),
+    )
+    assert r.status_code == 200
+
+    db.expire_all()
+    actualizado = db.get(models.Ticket, ticket.id)
+    assert actualizado.assigned_to == relevo.id
+    assert actualizado.status == models.StatusEnum.in_process
+
+
+def test_reasignar_a_destino_invalido_da_400(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    inactivo = create_user(db, "technician")
+    inactivo.is_active = False
+    db.commit()
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    db.commit()
+
+    # Empleado, técnico inactivo, id inexistente y el propio técnico: todos inválidos
+    for destino in (empleado.id, inactivo.id, 999999, tecnico.id):
+        r = client.patch(
+            f"/users/{tecnico.id}",
+            json={"is_active": False, "reassign_to": destino},
+            headers=auth_headers(admin),
+        )
+        assert r.status_code == 400, f"destino {destino} debería ser inválido"
+
+    # Nada se aplicó: el técnico sigue activo y el ticket sigue con él
+    db.expire_all()
+    assert db.get(models.User, tecnico.id).is_active is True
+    assert db.get(models.Ticket, ticket.id).assigned_to == tecnico.id
+
+
+def test_get_tickets_filtra_por_asignado(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    otro = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    propio = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    ajeno = create_ticket(db, empleado.id, assigned_to=otro.id)
+    create_ticket(db, empleado.id)  # sin asignar
+    db.commit()
+
+    r = client.get(f"/tickets/?assigned_to={tecnico.id}", headers=auth_headers(admin))
+    ids = [t["id"] for t in r.json()["items"]]
+    assert ids == [propio.id]
+    assert ajeno.id not in ids
+
+
+def test_filtro_asignado_respeta_visibilidad_tecnico(client, db):
+    tecnico = create_user(db, "technician")
+    otro = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    create_ticket(db, empleado.id, assigned_to=otro.id)
+    db.commit()
+
+    # El técnico no ve el ticket de otro técnico aunque filtre por su id
+    r = client.get(f"/tickets/?assigned_to={otro.id}", headers=auth_headers(tecnico))
+    assert r.json()["items"] == []
