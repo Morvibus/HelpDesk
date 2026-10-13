@@ -58,6 +58,9 @@ class TicketResponse(BaseModel):
     created_by: int
     assigned_to: Optional[int] = None
     created_at: datetime
+    # Antigüedad en horas hábiles (created_at -> now si está abierto; -> closed_at si cerró).
+    # La calcula el backend al listar; None si no está disponible.
+    business_age_hours: Optional[float] = None
     
     class Config:
         from_attributes = True
@@ -99,5 +102,7 @@ class MetricsResponse(BaseModel):
     total_tickets: int
     tickets_by_status: dict[str, int]
     average_resolution_time_hours: float
+    average_resolution_business_hours: float
     resolved_by_technician: dict[str, int]
     avg_resolution_by_technician: dict[str, float]
+    avg_resolution_by_technician_business: dict[str, float]

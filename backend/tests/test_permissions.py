@@ -1,9 +1,10 @@
 """Visibilidad y pertenencia de tickets/mensajes/acciones según el rol."""
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import models
 from conftest import PASSWORD, auth_headers, create_ticket, create_user
+from main import business_hours_between
 
 
 def test_empleado_solo_ve_sus_tickets(client, db):
@@ -122,6 +123,8 @@ def test_metricas_empleado_solo_cuentan_sus_tickets(client, db):
     assert data["tickets_by_status"]["created"] == 2
     assert data["resolved_by_technician"] == {}
     assert data["avg_resolution_by_technician"] == {}
+    assert data["avg_resolution_by_technician_business"] == {}
+    assert data["average_resolution_business_hours"] == 0.0
 
 
 def test_metricas_permitidas_para_tecnico_y_admin(client, db):
@@ -282,3 +285,73 @@ def test_metricas_promedio_resolucion_por_tecnico(client, db):
 
     data = client.get("/metrics/", headers=auth_headers(admin)).json()
     assert data["avg_resolution_by_technician"] == {tecnico.name: 2.0}
+
+
+# --- Horas hábiles (jornada lun-vie 07:30-17:00, sáb 07:30-12:00, en UTC-6) ---
+
+def test_business_hours_mismo_dia():
+    # lunes 13:30-16:00 UTC = 07:30-10:00 local => 2.5 h
+    assert business_hours_between(datetime(2026, 10, 12, 13, 30), datetime(2026, 10, 12, 16, 0)) == 2.5
+
+
+def test_business_hours_clampa_inicio_fuera_de_jornada():
+    # inicio 06:00 UTC = 00:00 local: cuenta desde las 07:30 local => 2.5 h
+    assert business_hours_between(datetime(2026, 10, 12, 6, 0), datetime(2026, 10, 12, 16, 0)) == 2.5
+
+
+def test_business_hours_jornada_completa():
+    # 07:30-17:00 local => 9.5 h
+    assert business_hours_between(datetime(2026, 10, 12, 13, 30), datetime(2026, 10, 12, 23, 30)) == 9.5
+
+
+def test_business_hours_viernes_a_lunes_incluye_sabado():
+    # viernes 16:00 UTC (10:00 local) -> lunes 14:00 UTC (08:00 local):
+    # vie 10:00-17:00 (7 h) + sáb 07:30-12:00 (4.5 h) + lun 07:30-08:00 (0.5 h) = 12 h
+    assert business_hours_between(datetime(2026, 10, 16, 16, 0), datetime(2026, 10, 19, 14, 0)) == 12.0
+
+
+def test_business_hours_sabado_medio_dia():
+    # sábado 13:00 UTC (07:00 local) -> 19:30 UTC (13:30 local): ventana 07:30-12:00 => 4.5 h
+    assert business_hours_between(datetime(2026, 10, 17, 13, 0), datetime(2026, 10, 17, 19, 30)) == 4.5
+
+
+def test_business_hours_domingo_es_cero():
+    assert business_hours_between(datetime(2026, 10, 18, 14, 0), datetime(2026, 10, 18, 20, 0)) == 0.0
+
+
+def test_business_hours_fin_menor_o_igual_inicio_es_cero():
+    assert business_hours_between(datetime(2026, 10, 12, 16, 0), datetime(2026, 10, 12, 13, 30)) == 0.0
+    assert business_hours_between(datetime(2026, 10, 12, 13, 30), datetime(2026, 10, 12, 13, 30)) == 0.0
+
+
+def test_metricas_resolucion_en_horas_habiles(client, db):
+    admin = create_user(db, "admin")
+    tecnico = create_user(db, "technician")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    # Creado vie 16/10 16:00 UTC (10:00 local), resuelto lun 19/10 14:30 UTC (08:30 local)
+    ticket.status = models.StatusEnum.solved
+    ticket.created_at = datetime(2026, 10, 16, 16, 0)
+    ticket.closed_at = datetime(2026, 10, 19, 14, 30)
+    db.commit()
+
+    data = client.get("/metrics/", headers=auth_headers(admin)).json()
+    # vie 7 h + sáb 4.5 h + lun 1 h = 12.5 h hábiles; en calendario son 70.5 h
+    assert data["average_resolution_business_hours"] == 12.5
+    assert data["avg_resolution_by_technician_business"] == {tecnico.name: 12.5}
+    assert data["average_resolution_time_hours"] > 12.5
+
+
+def test_get_tickets_incluye_antiguedad_en_horas_habiles(client, db):
+    admin = create_user(db, "admin")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+    # Creado vie 16/10 14:00 UTC (08:00 local), cerrado 16:30 UTC (10:30 local) => 2.5 h hábiles
+    ticket.status = models.StatusEnum.solved
+    ticket.created_at = datetime(2026, 10, 16, 14, 0)
+    ticket.closed_at = datetime(2026, 10, 16, 16, 30)
+    db.commit()
+
+    r = client.get("/tickets/", headers=auth_headers(admin))
+    item = next(t for t in r.json()["items"] if t["id"] == ticket.id)
+    assert item["business_age_hours"] == 2.5

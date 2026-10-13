@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from database import get_db
 from jose import JWTError, jwt 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 from security import SECRET_KEY, ALGORITHM
 import models
 import schemas
@@ -41,6 +41,51 @@ app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 # validado (nunca del filename) para que no se sirva HTML/JS desde /static.
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}
+
+# --- HORARIO LABORAL (métricas en horas hábiles) ---
+# Los timestamps se guardan en UTC (DateTime sin timezone => naive = UTC). La jornada
+# aplica en la zona local de la empresa: lun-vie 07:30-17:00 (9.5 h), sáb 07:30-12:00 (4.5 h),
+# domingo sin jornada. Si cambia la zona o la jornada se ajusta SOLO acá.
+LOCAL_TZ = timezone(timedelta(hours=-6))
+WORK_WINDOWS = {
+    0: (time(7, 30), time(17, 0)),  # lunes
+    1: (time(7, 30), time(17, 0)),  # martes
+    2: (time(7, 30), time(17, 0)),  # miércoles
+    3: (time(7, 30), time(17, 0)),  # jueves
+    4: (time(7, 30), time(17, 0)),  # viernes
+    5: (time(7, 30), time(12, 0)),  # sábado
+    6: None,                        # domingo
+}
+
+
+def _as_utc(dt):
+    """Los timestamps de Postgres (DateTime plano) vuelven naive: se asumen UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def business_hours_between(start, end):
+    """Horas hábiles transcurridas entre start y end (NaN si no hay solape o end <= start)."""
+    s = _as_utc(start).astimezone(LOCAL_TZ)
+    e = _as_utc(end).astimezone(LOCAL_TZ)
+    if e <= s:
+        return 0.0
+
+    total = 0.0
+    day = s.date()
+    while day <= e.date():
+        window = WORK_WINDOWS.get(day.weekday())
+        if window is not None:
+            day_start = datetime.combine(day, window[0], tzinfo=LOCAL_TZ)
+            day_end = datetime.combine(day, window[1], tzinfo=LOCAL_TZ)
+            seg_start = max(s, day_start)
+            seg_end = min(e, day_end)
+            if seg_start < seg_end:
+                total += (seg_end - seg_start).total_seconds() / 3600
+        day += timedelta(days=1)
+
+    return round(total, 2)
 
 # Configuración de OAuth2 para que Swagger entienda dónde pedir el token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -313,6 +358,13 @@ def get_tickets(
         models.Ticket.created_at.desc(),
         models.Ticket.id.desc(),
     ).offset(offset).limit(limit).all()
+
+    # Antigüedad en horas hábiles por ticket (solo lectura; no persiste nada):
+    # abierto => created_at -> now; cerrado => created_at -> closed_at
+    now_utc = datetime.now(timezone.utc)
+    for t in tickets:
+        t.business_age_hours = business_hours_between(t.created_at, t.closed_at or now_utc)
+
     return {"items": tickets, "total": total}
 
 @app.get("/tickets/{ticket_id}", response_model=schemas.TicketResponse)
@@ -649,6 +701,7 @@ def get_metrics(
         query = db.query(models.Ticket).filter(models.Ticket.created_by == current_user.id)
         resolved_by_tech = {}
         avg_resolution_by_tech = {}
+        avg_business_by_tech = {}
     else:
         query = db.query(models.Ticket)
         resolved_by_tech = {
@@ -670,6 +723,7 @@ def get_metrics(
             .all()
         )
         avg_resolution_by_tech = {name: round(avg, 2) for name, avg in resolution_rows if avg is not None}
+        avg_business_by_tech = {}
 
     # 1. Total histórico de tickets (del alcance)
     total_tickets = query.count()
@@ -688,12 +742,43 @@ def get_metrics(
         total_seconds = sum((t.closed_at - t.created_at).total_seconds() for t in resolved_tickets)
         avg_time_hours = (total_seconds / len(resolved_tickets)) / 3600
 
+    # 3b. Promedios en horas hábiles (business_hours_between no es agregable en SQL:
+    # se calculan en Python sobre los tickets resueltos del alcance).
+    avg_business_hours = 0.0
+    if resolved_tickets:
+        business_times = [
+            business_hours_between(t.created_at, t.closed_at)
+            for t in resolved_tickets
+            if t.closed_at is not None and t.created_at is not None
+        ]
+        if business_times:
+            avg_business_hours = sum(business_times) / len(business_times)
+
+        if current_user.role != models.RoleEnum.employee:
+            user_names = dict(db.query(models.User.id, models.User.name).all())
+            per_tech_business = {}
+            for t in resolved_tickets:
+                if t.assigned_to is None or t.created_at is None or t.closed_at is None:
+                    continue
+                name = user_names.get(t.assigned_to)
+                if name is None:
+                    continue
+                per_tech_business.setdefault(name, []).append(
+                    business_hours_between(t.created_at, t.closed_at)
+                )
+            avg_business_by_tech = {
+                name: round(sum(values) / len(values), 2)
+                for name, values in per_tech_business.items()
+            }
+
     return {
         "total_tickets": total_tickets,
         "tickets_by_status": tickets_by_status,
         "average_resolution_time_hours": round(avg_time_hours, 2),
+        "average_resolution_business_hours": round(avg_business_hours, 2),
         "resolved_by_technician": resolved_by_tech,
-        "avg_resolution_by_technician": avg_resolution_by_tech
+        "avg_resolution_by_technician": avg_resolution_by_tech,
+        "avg_resolution_by_technician_business": avg_business_by_tech,
     }
 
 
