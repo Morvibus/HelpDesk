@@ -9,8 +9,8 @@ import { useNavigate } from 'react-router-dom'
 // --- Componentes de tablero a nivel de módulo (no se redefinen por render) ---
 
 const getPriorityBadge = (priority) => {
-    const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30', urgent: 'text-white bg-red-600 dark:bg-red-700' }
-    const labels = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' }
+    const styles = { low: 'text-gray-500 bg-gray-100 dark:bg-gray-800', medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30', high: 'text-red-600 bg-red-50 dark:bg-red-900/30' }
+    const labels = { low: 'Baja', medium: 'Media', high: 'Alta' }
     return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${styles[priority] || ''}`}>{labels[priority] || priority}</span>
 }
 

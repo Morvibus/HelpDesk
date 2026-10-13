@@ -240,7 +240,7 @@ export default function TicketDetail() {
         created: 'Nuevo', assigned: 'Asignado', in_process: 'En Proceso', solved: 'Solucionado', closed: 'Cerrado'
     }
     const priorityLabels = {
-        low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente'
+        low: 'Baja', medium: 'Media', high: 'Alta'
     }
 
     return (

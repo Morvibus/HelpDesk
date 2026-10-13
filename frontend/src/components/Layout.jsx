@@ -59,16 +59,18 @@ export default function Layout({ children }) {
                         </div>
 
                         <div className="flex items-center space-x-1 sm:space-x-4">
-                            {/* Botón Nuevo Ticket (icono solo en móvil) */}
-                            <button
-                                onClick={openTicketModal}
-                                aria-label="Nuevo Ticket"
-                                title="Nuevo Ticket"
-                                className="inline-flex items-center px-2 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-dark dark:bg-brand-light dark:hover:bg-brand-primary dark:text-gray-900 transition-colors"
-                            >
-                                <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" />
-                                <span className="hidden sm:inline">Nuevo Ticket</span>
-                            </button>
+                            {/* Botón Nuevo Ticket: solo empleados (el backend no deja a técnicos/admins) */}
+                            {role === 'employee' && (
+                                <button
+                                    onClick={openTicketModal}
+                                    aria-label="Nuevo Ticket"
+                                    title="Nuevo Ticket"
+                                    className="inline-flex items-center px-2 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-dark dark:bg-brand-light dark:hover:bg-brand-primary dark:text-gray-900 transition-colors"
+                                >
+                                    <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" />
+                                    <span className="hidden sm:inline">Nuevo Ticket</span>
+                                </button>
+                            )}
 
                             <div className="flex items-center space-x-1 sm:space-x-2 border-l border-gray-200 dark:border-gray-700 pl-2 sm:pl-4">
                                 {/* Botón Modo Oscuro */}

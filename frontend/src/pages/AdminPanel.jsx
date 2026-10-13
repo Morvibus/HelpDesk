@@ -11,7 +11,7 @@ const LIMIT = 50
 
 const ROLE_LABELS = { employee: 'Empleado', technician: 'Técnico', admin: 'Admin' }
 const STATUS_LABELS = { created: 'Nuevo', assigned: 'Asignado', in_process: 'En Proceso', solved: 'Solucionado', closed: 'Cerrado' }
-const PRIORITY_LABELS = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' }
+const PRIORITY_LABELS = { low: 'Baja', medium: 'Media', high: 'Alta' }
 
 const STATUS_STYLES = {
     created: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50',
@@ -24,12 +24,11 @@ const PRIORITY_STYLES = {
     low: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700',
     medium: 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/50',
     high: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50',
-    urgent: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50',
 }
 
 // Semáforo de antigüedad: umbrales en HORAS HÁBILES por prioridad (jornada lun-vie
-// 07:30-17:00, sáb 07:30-12:00). Aprox. 1 / 2 / 3 / 5 días hábiles.
-const AGE_THRESHOLDS = { urgent: 10, high: 20, medium: 30, low: 48 }
+// 07:30-17:00, sáb 07:30-12:00). Aprox. 2 / 3 / 5 días hábiles.
+const AGE_THRESHOLDS = { high: 20, medium: 30, low: 48 }
 
 // La antigüedad en horas hábiles la calcula el backend (campo business_age_hours).
 const businessAgeHours = (ticket) => ticket.business_age_hours ?? 0
@@ -890,7 +889,6 @@ const TicketsTab = () => {
                         <option value="low">Baja</option>
                         <option value="medium">Media</option>
                         <option value="high">Alta</option>
-                        <option value="urgent">Urgente</option>
                     </select>
                 </div>
             </div>
@@ -1115,7 +1113,7 @@ const PerformanceTab = () => {
                     <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5"></span>OK: dentro del umbral</span>
                     <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 mr-1.5"></span>Atención: pasó la mitad del umbral</span>
                     <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-1.5"></span>Crítico: superó el umbral</span>
-                    <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600 mr-1.5"></span>Umbrales (hábiles): urgente 10 h · alta 20 h · media 30 h · baja 48 h</span>
+                    <span className="inline-flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600 mr-1.5"></span>Umbrales (hábiles): alta 20 h · media 30 h · baja 48 h</span>
                 </div>
             </div>
 
