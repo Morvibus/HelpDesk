@@ -1,8 +1,8 @@
-"""Validación de /upload-image/: content-type, tamaño y extensión."""
+"""Validación de /upload-image/ (adjuntos RF-02): tipo, firma del contenido, tamaño y extensión."""
 import io
 import os
 
-import main
+import routes_tickets
 from conftest import auth_headers, create_user
 
 
@@ -26,21 +26,21 @@ def test_upload_rechaza_content_type_no_imagen(client, db):
 
 def test_upload_rechaza_archivos_grandes(client, db, monkeypatch):
     # Bajamos el límite en vez de subir 5 MB de verdad
-    monkeypatch.setattr(main, "MAX_UPLOAD_BYTES", 1024)
+    monkeypatch.setattr(routes_tickets, "MAX_UPLOAD_BYTES", 1024)
     headers = auth_headers(create_user(db))
-    r = _upload(client, headers, data=b"\xff\xd8" + b"x" * 4096)
+    r = _upload(client, headers, data=b"\xff\xd8\xff" + b"x" * 4096)  # firma JPEG válida: lo que falla es el tamaño
     assert r.status_code == 413
 
 
 def test_upload_usa_extension_del_content_type(client, db):
     headers = auth_headers(create_user(db))
-    antes = set(os.listdir(main.UPLOAD_DIR))
+    antes = set(os.listdir(routes_tickets.UPLOAD_DIR))
     r = _upload(client, headers, data=b"\xff\xd8\xff\xe0contenido", filename="t.bin")
     assert r.status_code == 200
 
     url = r.json()["image_url"]
     nombre = url.rsplit("/", 1)[-1]
-    ruta = os.path.join(main.UPLOAD_DIR, nombre)
+    ruta = os.path.join(routes_tickets.UPLOAD_DIR, nombre)
     try:
         assert url.startswith("/static/")
         assert nombre.endswith(".jpg")  
@@ -49,4 +49,16 @@ def test_upload_usa_extension_del_content_type(client, db):
     finally:
         if os.path.exists(ruta):
             os.remove(ruta)
-    assert set(os.listdir(main.UPLOAD_DIR)) == antes
+    assert set(os.listdir(routes_tickets.UPLOAD_DIR)) == antes
+
+
+def test_upload_acepta_pdf_y_verifica_firma(client, db):
+    headers = auth_headers(create_user(db))
+    r = _upload(client, headers, data=b"%PDF-1.7 contenido", content_type="application/pdf", filename="manual.pdf")
+    assert r.status_code == 200 and r.json()["image_url"].endswith(".pdf")
+    os.remove(os.path.join(routes_tickets.UPLOAD_DIR, r.json()["image_url"].rsplit("/", 1)[-1]))
+    # Declarar un tipo y mandar otro contenido: rechazado (y no queda basura en disco)
+    antes = set(os.listdir(routes_tickets.UPLOAD_DIR))
+    assert _upload(client, headers, data=b"<html>hola</html>", content_type="application/pdf").status_code == 400
+    assert _upload(client, headers, data=b"MZ\x90\x00", content_type="image/png").status_code == 400
+    assert set(os.listdir(routes_tickets.UPLOAD_DIR)) == antes

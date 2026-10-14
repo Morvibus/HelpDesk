@@ -1,24 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, fetchCatalog } from '../api'
 import Layout from '../components/Layout'
 import ArticleModal from '../components/ArticleModal'
 import { useAuthStore, decodeToken } from '../store/authStore'
 import { toast } from 'react-hot-toast'
 import { BookOpen, Plus, Search, Pencil, Trash2, ChevronDown, CheckCircle2 } from 'lucide-react'
 
-// Categorías fijas (deben coincidir con CategoryEnum del backend)
-const CATEGORIAS = [
-    { value: 'network', label: 'Red' },
-    { value: 'hardware', label: 'Hardware' },
-    { value: 'software', label: 'Software' },
-    { value: 'access', label: 'Accesos' },
-    { value: 'email', label: 'Correo' },
-    { value: 'other', label: 'Otro' },
-]
-
-const CATEGORIA_LABELS = Object.fromEntries(CATEGORIAS.map(c => [c.value, c.label]))
-
+// Colores para las categorías iniciales; las que cree el admin usan el de "other"
 const CATEGORIA_ESTILOS = {
     network: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50',
     hardware: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50',
@@ -43,10 +32,16 @@ export default function Library() {
     const [loadingMore, setLoadingMore] = useState(false)
     const [q, setQ] = useState('')
     const [category, setCategory] = useState('')
+    const [categorias, setCategorias] = useState([])  // catálogo /categories/ (incluye inactivas: hay artículos que las usan)
     const [expandedId, setExpandedId] = useState(null)
     const [recarga, setRecarga] = useState(0)
     // null = cerrado; {} = publicar libre; { article } = editar; { ticket } = crear desde ticket
     const [modal, setModal] = useState(null)
+
+    useEffect(() => {
+        fetchCatalog('/categories/').then(setCategorias).catch(() => {})
+    }, [])
+    const categoriaLabel = (key) => categorias.find(c => c.key === key)?.name || key
 
     // oxlint-disable react/exhaustive-effect-dependencies -- token y recarga recargan a propósito
     useEffect(() => {
@@ -146,8 +141,8 @@ export default function Library() {
                     className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:text-white transition-colors"
                 >
                     <option value="">Todas las categorías</option>
-                    {CATEGORIAS.map((c) => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
+                    {categorias.map((c) => (
+                        <option key={c.key} value={c.key}>{c.name}</option>
                     ))}
                 </select>
             </div>
@@ -174,8 +169,8 @@ export default function Library() {
                         return (
                             <div key={a.id} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
                                 <div className="flex items-start justify-between gap-3">
-                                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${CATEGORIA_ESTILOS[a.category] || ''}`}>
-                                        {CATEGORIA_LABELS[a.category] || a.category}
+                                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${CATEGORIA_ESTILOS[a.category] || CATEGORIA_ESTILOS.other}`}>
+                                        {categoriaLabel(a.category)}
                                     </span>
                                     {puedeGestionar(a) && (
                                         <div className="flex items-center gap-1">

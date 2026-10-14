@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuthStore, decodeToken, isTokenExpired } from '../store/authStore'
-import { KeyRound, Mail, Ticket } from 'lucide-react'
+import { KeyRound, Mail, Ticket, Eye, EyeOff } from 'lucide-react'
 
 const inputClass = "block w-full pl-10 sm:text-sm rounded-lg py-2 border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light focus:border-brand-primary dark:focus:border-brand-light transition-shadow"
 
 export default function Login() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [verPassword, setVerPassword] = useState(false)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
@@ -112,13 +113,23 @@ export default function Login() {
                                 </div>
                                 <input
                                     id="login-password"
-                                    type="password"
+                                    type={verPassword ? 'text' : 'password'}
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className={inputClass}
+                                    className={`${inputClass} pr-10`}
                                     placeholder="••••••••"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setVerPassword(v => !v)}
+                                    aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                    aria-pressed={verPassword}
+                                    title={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-brand-primary dark:hover:text-brand-light transition-colors"
+                                >
+                                    {verPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                </button>
                             </div>
                         </div>
 

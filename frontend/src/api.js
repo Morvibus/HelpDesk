@@ -1,8 +1,9 @@
 import axios from 'axios'
 import { useAuthStore } from './store/authStore'
 
-// URL base del API: VITE_API_URL (docker-compose / .env) o fallback local.
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
+// URL base del API: por defecto '/api', que el proxy de Vite reenvía al backend (mismo origen:
+// funciona igual desde otro dispositivo o un túnel). VITE_API_URL solo para apuntar a otro servidor.
+export const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '')
 
 // Cliente axios con la base ya configurada y el token JWT adjuntado automáticamente.
 export const api = axios.create({ baseURL: API_URL })
@@ -27,5 +28,20 @@ api.interceptors.response.use(
     }
 )
 
-// URL para WebSockets: convierte http(s):// en ws(s)://
-export const wsUrl = (path) => `${API_URL.replace(/^http/, 'ws')}${path}`
+// Catálogos (/categories/, /departments/): cambian poco, se piden una vez por sesión de página.
+// El panel admin llama a invalidateCatalog tras editarlos.
+const catalogCache = {}
+export const fetchCatalog = (path) => {
+    catalogCache[path] ??= api.get(path).then(r => r.data).catch((err) => {
+        delete catalogCache[path]  // un fallo no queda cacheado
+        throw err
+    })
+    return catalogCache[path]
+}
+export const invalidateCatalog = (path) => { delete catalogCache[path] }
+
+// URL para WebSockets: http(s):// -> ws(s)://; con base relativa se usa el host de la página
+// (wss si la página es https, como en un túnel)
+export const wsUrl = (path) => API_URL.startsWith('http')
+    ? `${API_URL.replace(/^http/, 'ws')}${path}`
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_URL}${path}`

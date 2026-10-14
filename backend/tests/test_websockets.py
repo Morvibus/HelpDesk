@@ -7,7 +7,7 @@ from fastapi import WebSocketDisconnect
 
 import models
 from conftest import create_ticket, create_user, token_for
-from main import ConnectionManager, NotificationManager, _ws_subprotocol_token
+from realtime import ConnectionManager, NotificationManager, _ws_subprotocol_token
 
 
 class FakeWS:
@@ -280,6 +280,35 @@ def test_chat_guarda_y_retransmite(client, db):
     assert db.query(models.Message).filter_by(ticket_id=ticket.id).count() == 1
 
 
+def test_chat_ignora_payload_invalido_sin_cerrar(client, db):
+    dueno = create_user(db, "employee")
+    ticket = create_ticket(db, dueno.id)
+
+    with client.websocket_connect(
+        f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(dueno)]
+    ) as chat:
+        for malo in ({}, {"content": None}, {"content": "   "}, ["hola"]):
+            chat.send_json(malo)
+        chat.send_json({"content": "valido"})
+        assert chat.receive_json()["content"] == "valido"  # el socket sigue vivo
+
+    assert db.query(models.Message).filter_by(ticket_id=ticket.id).count() == 1
+
+
+def test_chat_no_acepta_mensajes_en_ticket_cerrado(client, db):
+    dueno = create_user(db, "employee")
+    ticket = create_ticket(db, dueno.id)
+    ticket.status = models.StatusEnum.solved
+    db.commit()
+
+    with client.websocket_connect(
+        f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(dueno)]
+    ) as chat:
+        chat.send_json({"content": "sigo aqui"})
+    # al salir del with el servidor ya procesó el mensaje (cierra después)
+    assert db.query(models.Message).filter_by(ticket_id=ticket.id).count() == 0
+
+
 def test_multitab_notificaciones_reciben_las_dos_pestanas(client, db):
     """Regresión del bug multi-tab: cerrar una pestaña no apaga a la otra."""
     empleado = create_user(db, "employee")
@@ -320,3 +349,95 @@ def test_admin_recibe_mensaje_publico_de_ticket_asignado(client, db):
         chat.send_json({"content": "consulta al admin", "is_private_note": False})
         assert chat.receive_json()["content"] == "consulta al admin"
         assert adminWs.receive_json()["message"] == "consulta al admin"
+
+
+# --- Rol y estado leídos de la DB, no del token ---
+
+def test_ws_rechazan_usuario_desactivado(client, db):
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+    token = token_for(empleado)
+    empleado.is_active = False
+    db.commit()
+
+    for url in ("/ws/notifications", f"/ws/tickets/{ticket.id}/chat"):
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect(url, subprotocols=["auth", token]):
+                pass
+
+
+def test_tecnico_degradado_no_recibe_notas_privadas(client, db):
+    tecnico = create_user(db, "technician")
+    ex_tecnico = create_user(db, "technician")
+    # el ex técnico es el creador: los mensajes públicos le llegan, las notas privadas no
+    ticket = create_ticket(db, ex_tecnico.id, assigned_to=tecnico.id)
+    token_viejo = token_for(ex_tecnico)  # el token sigue diciendo "technician"
+    ex_tecnico.role = models.RoleEnum.employee
+    db.commit()
+
+    with (
+        client.websocket_connect(
+            f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(tecnico)]
+        ) as chat,
+        client.websocket_connect("/ws/notifications", subprotocols=["auth", token_viejo]) as ex,
+    ):
+        chat.send_json({"content": "nota interna", "is_private_note": True})
+        assert chat.receive_json()["is_private_note"] is True
+        chat.send_json({"content": "aviso publico", "is_private_note": False})
+        assert chat.receive_json()["content"] == "aviso publico"
+        # lo primero que recibe es el público: la nota privada nunca se encoló
+        assert ex.receive_json()["message"] == "aviso publico"
+
+
+def test_nota_privada_de_empleado_se_guarda_como_publica(client, db):
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+
+    with client.websocket_connect(
+        f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(empleado)]
+    ) as chat:
+        chat.send_json({"content": "hola", "is_private_note": True})
+        assert chat.receive_json()["is_private_note"] is False
+
+    assert db.query(models.Message).filter_by(ticket_id=ticket.id).one().is_private_note is False
+
+
+def test_tecnico_no_entra_al_chat_de_otro_tecnico(client, db):
+    empleado = create_user(db, "employee")
+    tecnico_a = create_user(db, "technician")
+    tecnico_b = create_user(db, "technician")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico_a.id)
+
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(
+            f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(tecnico_b)]
+        ):
+            pass
+
+
+def test_chat_con_adjunto_valido_y_rechaza_rutas_ajenas(client, db):
+    import os
+    import routes_tickets
+    from conftest import auth_headers
+
+    dueno = create_user(db, "employee")
+    ticket = create_ticket(db, dueno.id)
+    import io
+    subida = client.post(
+        "/upload-image/", files={"file": ("m.pdf", io.BytesIO(b"%PDF-1.4 x"), "application/pdf")}, headers=auth_headers(dueno),
+    ).json()["image_url"]
+    try:
+        with client.websocket_connect(
+            f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(dueno)]
+        ) as chat:
+            # URLs que no salieron de /upload-image/ se ignoran (sin cerrar el socket)
+            for mala in ("https://evil.example.com/x.pdf", "/static/../../etc/passwd", "/static/" + "0" * 36 + ".pdf"):
+                chat.send_json({"content": "malo", "image_url": mala})
+            chat.send_json({"content": "m.pdf", "image_url": subida})
+            recibido = chat.receive_json()
+            assert (recibido["content"], recibido["image_url"]) == ("m.pdf", subida)
+
+        r = client.get(f"/tickets/{ticket.id}/messages", headers=auth_headers(dueno)).json()
+        assert [(m["content"], m["image_url"]) for m in r["items"]] == [("m.pdf", subida)]
+    finally:
+        os.remove(os.path.join(routes_tickets.UPLOAD_DIR, subida.rsplit("/", 1)[-1]))

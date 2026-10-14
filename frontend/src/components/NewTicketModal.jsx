@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, fetchCatalog } from '../api'
 import { toast } from 'react-hot-toast'
-import { X, Loader2, ArrowRight, ArrowLeft, BookOpen, ChevronDown, CheckCircle2, Wifi, Monitor, AppWindow, KeyRound, Mail, HelpCircle } from 'lucide-react'
+import { X, Loader2, ArrowRight, ArrowLeft, BookOpen, ChevronDown, CheckCircle2, Wifi, Monitor, AppWindow, KeyRound, Mail, HelpCircle, Tag } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 
-// Categorías fijas (deben coincidir con CategoryEnum del backend)
-const CATEGORIAS = [
-    { value: 'network', label: 'Red', icon: Wifi },
-    { value: 'hardware', label: 'Hardware', icon: Monitor },
-    { value: 'software', label: 'Software', icon: AppWindow },
-    { value: 'access', label: 'Accesos', icon: KeyRound },
-    { value: 'email', label: 'Correo', icon: Mail },
-    { value: 'other', label: 'Otro', icon: HelpCircle },
+// Íconos de las categorías iniciales; las que cree el admin usan uno genérico
+const ICONOS_CATEGORIA = { network: Wifi, hardware: Monitor, software: AppWindow, access: KeyRound, email: Mail, other: HelpCircle }
+
+// Tipos fijos de ticket (TicketTypeEnum del backend, RF-03)
+const TIPOS = [
+    { value: 'incident', label: 'Incidente', desc: 'Algo no funciona' },
+    { value: 'service_request', label: 'Solicitud', desc: 'Necesito algo nuevo' },
+    { value: 'maintenance', label: 'Mantenimiento', desc: 'Revisión de un equipo' },
+    { value: 'inquiry', label: 'Consulta', desc: 'Tengo una duda' },
 ]
 
 // Prioridades (ya no existe 'urgent')
@@ -28,7 +29,9 @@ export default function NewTicketModal() {
 
     const [step, setStep] = useState(1)
     const [title, setTitle] = useState('')
+    const [ticketType, setTicketType] = useState('incident')
     const [category, setCategory] = useState('')
+    const [categorias, setCategorias] = useState([])
     const [description, setDescription] = useState('')
     const [priority, setPriority] = useState('low')
     const [loading, setLoading] = useState(false)
@@ -39,11 +42,18 @@ export default function NewTicketModal() {
     const [cargandoSugerencias, setCargandoSugerencias] = useState(false)
     const [sugerenciaAbierta, setSugerenciaAbierta] = useState(null)
 
+    // Antes del return temprano: los hooks no pueden ser condicionales
+    useEffect(() => {
+        if (!isTicketModalOpen) return
+        fetchCatalog('/categories/').then(c => setCategorias(c.filter(x => x.is_active))).catch(() => {})
+    }, [isTicketModalOpen])
+
     if (!isTicketModalOpen) return null
 
     const resetear = () => {
         setStep(1)
         setTitle('')
+        setTicketType('incident')
         setCategory('')
         setDescription('')
         setPriority('low')
@@ -90,7 +100,7 @@ export default function NewTicketModal() {
         setError('')
         try {
             const { data } = await api.post('/tickets/', {
-                title, description, priority, category,
+                title, description, priority, category, ticket_type: ticketType,
             })
             triggerRefresh()
             cerrar()
@@ -138,20 +148,38 @@ export default function NewTicketModal() {
                 {step === 1 ? (
                     <form onSubmit={irAPaso2} className="p-6 space-y-5 overflow-y-auto">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">¿Qué tipo de problema es?</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">¿Qué necesitas?</label>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {CATEGORIAS.map((c) => {
-                                    const Icon = c.icon
-                                    const activo = category === c.value
+                                {TIPOS.map((t) => (
+                                    <button
+                                        key={t.value}
+                                        type="button"
+                                        onClick={() => setTicketType(t.value)}
+                                        aria-pressed={ticketType === t.value}
+                                        className={`px-3 py-2.5 rounded-xl border text-left transition-colors ${ticketType === t.value ? 'border-brand-primary bg-brand-primary/10 dark:border-brand-light' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                    >
+                                        <span className="block text-sm font-semibold text-gray-900 dark:text-white">{t.label}</span>
+                                        <span className="block text-[11px] text-gray-500 dark:text-gray-400 leading-tight mt-0.5">{t.desc}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Categoría</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {categorias.map((c) => {
+                                    const Icon = ICONOS_CATEGORIA[c.key] || Tag
+                                    const activo = category === c.key
                                     return (
                                         <button
-                                            key={c.value}
+                                            key={c.key}
                                             type="button"
-                                            onClick={() => setCategory(c.value)}
+                                            onClick={() => setCategory(c.key)}
                                             className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-sm font-medium transition-colors ${activo ? 'border-brand-primary bg-brand-primary/10 text-brand-primary dark:border-brand-light dark:text-brand-light' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                         >
                                             <Icon className="w-5 h-5" />
-                                            {c.label}
+                                            {c.name}
                                         </button>
                                     )
                                 })}

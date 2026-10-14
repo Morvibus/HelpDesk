@@ -145,3 +145,12 @@ def test_eliminar_solo_autor_o_admin(client, db):
     assert r.status_code == 204
 
     assert client.get(f"/library/{article_id}", headers=auth_headers(autor)).status_code == 404
+
+
+def test_editar_con_null_no_vacia_campos(client, db):
+    tecnico = create_user(db, "technician")
+    creado = client.post("/library/", json=_articulo(), headers=auth_headers(tecnico)).json()
+
+    r = client.patch(f"/library/{creado['id']}", json={"title": None}, headers=auth_headers(tecnico))
+    assert r.status_code == 200
+    assert r.json()["title"] == "Sin internet"

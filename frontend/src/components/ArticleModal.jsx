@@ -1,16 +1,6 @@
-import { useState } from 'react'
-import { api } from '../api'
+import { useEffect, useState } from 'react'
+import { api, fetchCatalog } from '../api'
 import { X, Loader2, BookOpen } from 'lucide-react'
-
-// Categorías fijas de la biblioteca (deben coincidir con CategoryEnum del backend)
-const CATEGORIAS = [
-    { value: 'network', label: 'Red' },
-    { value: 'hardware', label: 'Hardware' },
-    { value: 'software', label: 'Software' },
-    { value: 'access', label: 'Accesos' },
-    { value: 'email', label: 'Correo' },
-    { value: 'other', label: 'Otro' },
-]
 
 /**
  * Modal para crear o editar una entrada de la biblioteca.
@@ -25,8 +15,15 @@ export default function ArticleModal({ onClose, onSaved, article = null, ticket 
     const [problem, setProblem] = useState(article?.problem || ticket?.description || '')
     const [solution, setSolution] = useState(article?.solution || '')
     const [category, setCategory] = useState(article?.category || 'other')
+    const [categorias, setCategorias] = useState([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+
+    useEffect(() => {
+        fetchCatalog('/categories/').then(setCategorias).catch(() => {})
+    }, [])
+    // Activas, más la actual aunque esté dada de baja (el backend permite conservarla)
+    const opciones = categorias.filter(c => c.is_active || c.key === category)
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -99,8 +96,8 @@ export default function ArticleModal({ onClose, onSaved, article = null, ticket 
                             onChange={(e) => setCategory(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light dark:bg-gray-800 dark:text-white outline-none transition-shadow"
                         >
-                            {CATEGORIAS.map((c) => (
-                                <option key={c.value} value={c.value}>{c.label}</option>
+                            {opciones.map((c) => (
+                                <option key={c.key} value={c.key}>{c.name}</option>
                             ))}
                         </select>
                     </div>

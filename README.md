@@ -49,6 +49,17 @@ docker compose up -d --build
 El login usa el correo electrónico; el endpoint `POST /login` recibe datos
 `application/x-www-form-urlencoded` (así lo exige el flujo OAuth2 de Swagger).
 
+### 📱 Acceso desde otros dispositivos
+
+El frontend llama al API por `/api` y Vite lo reenvía al backend, así que **solo hace falta exponer el
+puerto 5173** (sin tocar CORS):
+
+- **Misma red Wi-Fi:** `http://<IP-del-equipo>:5173` (la IP sale de `ipconfig`). Si no carga, revisar que el
+  firewall de Windows permita conexiones entrantes al 5173 en redes privadas.
+- **Túnel de VS Code:** panel *Ports* → *Forward a Port* → `5173`, y abrir la URL `https://…devtunnels.ms`.
+  Con visibilidad *Private* (por defecto) pide iniciar sesión con la misma cuenta de GitHub/Microsoft;
+  *Public* deja la app expuesta a cualquiera con el enlace: usarlo solo para pruebas puntuales.
+
 ## 🧑‍💻 Desarrollo
 
 ```bash
@@ -76,12 +87,48 @@ docker compose run --rm backend python -m pytest
 > Al cambiar modelos: `docker compose run --rm backend alembic revision --autogenerate -m "qué cambia"`,
 > revisar el archivo generado en `backend/alembic/versions/` y commitearlo.
 
+## 💾 Respaldo y recuperación
+
+Qué respaldar:
+
+| Qué | Dónde | Cómo |
+|-----|-------|------|
+| Base de datos | volumen `postgres_data` | `pg_dump` (abajo) |
+| Imágenes subidas | `backend/uploads/` | copiar la carpeta |
+| Configuración y secretos | `backend/.env` | copiar a un lugar seguro, **nunca** al repositorio |
+
+El código y las migraciones ya viven en Git. Los comandos funcionan igual en PowerShell y bash
+(se evita `>` porque PowerShell 5.1 corrompe la salida binaria).
+
+**Respaldo** (con el stack levantado):
+
+```bash
+docker compose exec db pg_dump -U helpdesk_user -d helpdesk_db -Fc -f /tmp/helpdesk.dump
+docker compose cp db:/tmp/helpdesk.dump ./helpdesk-AAAA-MM-DD.dump
+docker compose exec db rm /tmp/helpdesk.dump
+```
+
+**Recuperación** (reemplaza los datos actuales):
+
+```bash
+docker compose stop backend
+docker compose cp ./helpdesk-AAAA-MM-DD.dump db:/tmp/restore.dump
+docker compose exec db pg_restore -U helpdesk_user -d helpdesk_db --clean --if-exists /tmp/restore.dump
+docker compose exec db rm /tmp/restore.dump
+docker compose start backend
+```
+
+Al arrancar, el backend aplica las migraciones pendientes si el respaldo es de una versión anterior.
+Para comprobar un respaldo sin tocar la base real, restáuralo en una base temporal
+(`createdb -U helpdesk_user restore_check` → `pg_restore -d restore_check ...` → `dropdb`).
+Los archivos `.dump` contienen datos personales: guárdalos fuera del repositorio.
+
 ## 📂 Estructura
 
 ```
 HelpDesk/
 ├── docker-compose.yml      # Postgres + backend (:8000) + frontend (:5173)
-├── backend/                # FastAPI — todo en main.py (rutas), models.py, schemas.py, security.py
+├── backend/                # FastAPI — main.py (app), routes_*.py + realtime.py (rutas), deps.py, models.py, schemas.py
 ├── frontend/               # React — src/pages, src/components, src/store (zustand)
 ├── AGENTS.md               # Instrucciones para agentes de código
 └── MEMORY.md               # Estado y decisiones del proyecto entre sesiones

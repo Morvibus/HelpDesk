@@ -55,7 +55,7 @@ services:
     ports:
       - "5173:5173" # Puerto por defecto de Vite
     environment:
-      - VITE_API_URL=http://localhost:8000 # URL para que React se comunique con FastAPI
+      - API_PROXY_TARGET=http://backend:8000 # el proxy /api de Vite llega al backend por la red de Docker
     volumes:
       - ./frontend:/app
       - /app/node_modules

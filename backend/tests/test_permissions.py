@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import models
 from conftest import PASSWORD, auth_headers, create_ticket, create_user
-from main import business_hours_between
+from business_hours import business_hours_between
 
 
 def test_empleado_solo_ve_sus_tickets(client, db):
@@ -368,6 +368,8 @@ def test_desactivar_tecnico_devuelve_tickets_abiertos_al_pool(client, db):
     t_asignado.status = models.StatusEnum.assigned
     t_en_proceso = create_ticket(db, empleado.id, assigned_to=tecnico.id)
     t_en_proceso.status = models.StatusEnum.in_process
+    t_pendiente = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+    t_pendiente.status = models.StatusEnum.pending
     t_resuelto = create_ticket(db, empleado.id, assigned_to=tecnico.id)
     t_resuelto.status = models.StatusEnum.solved
     db.commit()
@@ -383,6 +385,9 @@ def test_desactivar_tecnico_devuelve_tickets_abiertos_al_pool(client, db):
     # El que ya estaba iniciado conserva 'in_process' (marcador de "ya iniciado") y queda sin asignar
     assert db.get(models.Ticket, t_en_proceso.id).assigned_to is None
     assert db.get(models.Ticket, t_en_proceso.id).status == models.StatusEnum.in_process
+    # El pendiente también es abierto: vuelve al pool conservando 'pending'
+    assert db.get(models.Ticket, t_pendiente.id).assigned_to is None
+    assert db.get(models.Ticket, t_pendiente.id).status == models.StatusEnum.pending
     # Los resueltos no se tocan (ahí vive la atribución de las métricas)
     assert db.get(models.Ticket, t_resuelto.id).assigned_to == tecnico.id
     assert db.get(models.Ticket, t_resuelto.id).status == models.StatusEnum.solved
@@ -479,3 +484,224 @@ def test_filtro_asignado_respeta_visibilidad_tecnico(client, db):
     # El técnico no ve el ticket de otro técnico aunque filtre por su id
     r = client.get(f"/tickets/?assigned_to={otro.id}", headers=auth_headers(tecnico))
     assert r.json()["items"] == []
+
+
+# --- Hallazgos de la auditoría (auth, reapertura, asignación, visibilidad) ---
+
+def test_admin_desactivado_no_crea_usuarios(client, db):
+    admin = create_user(db, "admin")
+    headers = auth_headers(admin)  # token emitido antes de desactivarlo
+    admin.is_active = False
+    db.commit()
+
+    r = client.post(
+        "/users/",
+        json={"name": "Nuevo", "email": f"n-{uuid.uuid4().hex[:8]}@helpdesk-mock.com",
+              "password": PASSWORD, "role": "admin"},
+        headers=headers,
+    )
+    assert r.status_code == 401
+
+
+def test_patch_no_reabre_ticket_cerrado(client, db):
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+    ticket.status = models.StatusEnum.closed
+    ticket.closed_at = datetime.utcnow() - timedelta(days=30)
+    db.commit()
+
+    r = client.patch(f"/tickets/{ticket.id}", json={"status": "in_process"}, headers=auth_headers(empleado))
+    assert r.status_code == 400
+    db.refresh(ticket)
+    assert ticket.status == models.StatusEnum.closed
+
+
+def test_tecnico_no_asigna_a_inexistente_ni_a_empleado(client, db):
+    empleado = create_user(db, "employee")
+    tecnico = create_user(db, "technician")
+    ticket = create_ticket(db, empleado.id)
+
+    for destino in (999999, empleado.id):
+        r = client.patch(f"/tickets/{ticket.id}", json={"assigned_to": destino}, headers=auth_headers(tecnico))
+        assert r.status_code == 400
+    db.refresh(ticket)
+    assert ticket.assigned_to is None
+
+
+def test_tecnico_no_abre_ni_toma_ticket_de_otro_tecnico(client, db):
+    empleado = create_user(db, "employee")
+    tecnico_a = create_user(db, "technician")
+    tecnico_b = create_user(db, "technician")
+    ticket = create_ticket(db, empleado.id, assigned_to=tecnico_a.id)
+    headers_b = auth_headers(tecnico_b)
+
+    assert client.get(f"/tickets/{ticket.id}", headers=headers_b).status_code == 403
+    assert client.get(f"/tickets/{ticket.id}/messages", headers=headers_b).status_code == 403
+    r = client.patch(f"/tickets/{ticket.id}", json={"assigned_to": tecnico_b.id}, headers=headers_b)
+    assert r.status_code == 403
+    # el dueño de la asignación y el admin sí lo ven
+    assert client.get(f"/tickets/{ticket.id}", headers=auth_headers(tecnico_a)).status_code == 200
+    assert client.get(f"/tickets/{ticket.id}", headers=auth_headers(create_user(db, "admin"))).status_code == 200
+
+
+def test_metricas_separan_tecnicos_homonimos(client, db):
+    admin = create_user(db, "admin")
+    empleado = create_user(db, "employee")
+    tecnicos = [create_user(db, "technician", name="Juan"), create_user(db, "technician", name="Juan")]
+    for horas, tecnico in zip((2, 4), tecnicos):
+        ticket = create_ticket(db, empleado.id, assigned_to=tecnico.id)
+        ticket.status = models.StatusEnum.solved
+        ticket.closed_at = ticket.created_at + timedelta(hours=horas)
+    db.commit()
+
+    data = client.get("/metrics/", headers=auth_headers(admin)).json()
+    assert data["avg_resolution_by_technician"] == {
+        f"Juan (#{tecnicos[0].id})": 2.0,
+        f"Juan (#{tecnicos[1].id})": 4.0,
+    }
+    assert data["resolved_by_technician"] == {f"Juan (#{t.id})": 1 for t in tecnicos}
+
+
+# --- Auditoría (solo admin) ---
+
+def test_auditoria_solo_admin(client, db):
+    for rol in ("employee", "technician"):
+        u = create_user(db, rol)
+        for kind in ("tickets", "users"):
+            assert client.get("/audit/", params={"kind": kind}, headers=auth_headers(u)).status_code == 403
+
+
+def test_auditoria_de_usuarios_registra_cambios_reales(client, db):
+    admin = create_user(db, "admin")
+    h = auth_headers(admin)
+    nuevo = client.post("/users/", headers=h, json={
+        "name": "Ana", "email": "ana@helpdesk-mock.com", "password": "secreta1", "role": "employee",
+    }).json()
+    # role cambia; name igual al actual no debe registrarse
+    client.patch(f"/users/{nuevo['id']}", headers=h, json={"role": "technician", "name": "Ana"})
+    client.patch(f"/users/{nuevo['id']}/password", headers=h, json={"new_password": "otra-secreta"})
+
+    r = client.get("/audit/", params={"kind": "users"}, headers=h).json()
+    assert r["total"] == 3
+    # más recientes primero
+    assert [(e["action"], e["old_value"], e["new_value"]) for e in r["items"]] == [
+        ("password", None, None),
+        ("role", "employee", "technician"),
+        ("created", None, "employee"),
+    ]
+    assert all(e["target_id"] == nuevo["id"] and e["changed_by"] == admin.id for e in r["items"])
+
+
+def test_auditoria_de_tickets_y_paginacion(client, db):
+    admin = create_user(db, "admin")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+    h = auth_headers(admin)
+    client.patch(f"/tickets/{ticket.id}", headers=h, json={"status": "in_process"})
+    client.patch(f"/tickets/{ticket.id}", headers=h, json={"status": "solved"})
+
+    todo = client.get("/audit/", headers=h).json()  # kind=tickets por defecto
+    assert todo["total"] >= 2 and all(e["target_id"] == ticket.id for e in todo["items"])
+    assert todo["items"][0]["new_value"] == "solved"
+    pagina = client.get("/audit/", params={"limit": 1, "offset": 1}, headers=h).json()
+    assert pagina["items"] == todo["items"][1:2]
+
+    # Filtro por ticket: el historial de otro ticket no se mezcla
+    otro = create_ticket(db, empleado.id)
+    client.patch(f"/tickets/{otro.id}", headers=h, json={"status": "pending"})
+    solo_otro = client.get("/audit/", params={"ticket_id": otro.id}, headers=h).json()
+    assert solo_otro["total"] >= 1 and all(e["target_id"] == otro.id for e in solo_otro["items"])
+    assert client.get("/audit/", params={"ticket_id": ticket.id}, headers=h).json()["total"] == todo["total"]
+
+
+# --- Observación en cambios de estado (RF-04) ---
+
+def test_cambio_de_estado_guarda_observacion(client, db):
+    admin = create_user(db, "admin")
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+    h = auth_headers(admin)
+
+    r = client.patch(f"/tickets/{ticket.id}", headers=h, json={"status": "pending", "comment": "  espera repuesto  "})
+    assert r.status_code == 200 and r.json()["status"] == "pending"
+    client.patch(f"/tickets/{ticket.id}", headers=h, json={"status": "solved", "comment": "   "})
+    client.post(f"/tickets/{ticket.id}/reopen", headers=h, json={"comment": "falla otra vez"})
+
+    items = client.get("/audit/", headers=h).json()["items"]
+    por_estado = {(e["action"], e["new_value"]): e["comment"] for e in items}
+    assert por_estado[("status_change", "pending")] == "espera repuesto"  # recortada
+    assert por_estado[("status_change", "solved")] is None  # en blanco = sin observación
+    assert por_estado[("reopened", "in_process")] == "falla otra vez"
+
+
+def test_reabrir_sin_cuerpo_sigue_funcionando(client, db):
+    empleado = create_user(db, "employee")
+    ticket = create_ticket(db, empleado.id)
+    ticket.status = models.StatusEnum.solved
+    ticket.closed_at = datetime.utcnow()
+    db.commit()
+
+    r = client.post(f"/tickets/{ticket.id}/reopen", headers=auth_headers(empleado))
+    assert r.status_code == 200 and r.json()["status"] == "in_process"
+
+
+# --- Catálogos: departamentos y categorías ---
+
+def test_catalogos_lectura_para_todos_escritura_solo_admin(client, db):
+    empleado = create_user(db, "employee")
+    tecnico = create_user(db, "technician")
+    for u in (empleado, tecnico):
+        h = auth_headers(u)
+        assert client.get("/categories/", headers=h).status_code == 200
+        assert client.get("/departments/", headers=h).status_code == 200
+        assert client.post("/categories/", json={"name": "X"}, headers=h).status_code == 403
+        assert client.post("/departments/", json={"name": "X"}, headers=h).status_code == 403
+        assert client.patch("/categories/other", json={"name": "Y"}, headers=h).status_code == 403
+
+
+def test_categorias_sembradas_y_alta_con_clave_derivada(client, db):
+    admin = create_user(db, "admin")
+    h = auth_headers(admin)
+    claves = {c["key"] for c in client.get("/categories/", headers=h).json()}
+    assert claves == {"network", "hardware", "software", "access", "email", "other"}
+
+    r = client.post("/categories/", json={"name": "  Cámaras IP "}, headers=h)
+    assert r.status_code == 201 and r.json() == {"key": "camaras_ip", "name": "Cámaras IP", "is_active": True}
+    # nombre repetido (sin importar mayúsculas) o vacío
+    assert client.post("/categories/", json={"name": "cámaras ip"}, headers=h).status_code == 400
+    assert client.post("/categories/", json={"name": "   "}, headers=h).status_code == 400
+    # renombrar no cambia la clave; renombrarse con otras mayúsculas vale
+    r = client.patch("/categories/camaras_ip", json={"name": "CÁMARAS IP", "is_active": False}, headers=h)
+    assert r.json() == {"key": "camaras_ip", "name": "CÁMARAS IP", "is_active": False}
+    assert client.patch("/categories/camaras_ip", json={"name": "Red"}, headers=h).status_code == 400
+
+
+def test_departamento_de_usuario_validado_y_auditado(client, db):
+    admin = create_user(db, "admin")
+    h = auth_headers(admin)
+    ventas = client.post("/departments/", json={"name": "Ventas"}, headers=h).json()
+    baja = client.post("/departments/", json={"name": "Baja"}, headers=h).json()
+    client.patch(f"/departments/{baja['id']}", json={"is_active": False}, headers=h)
+    empleado = create_user(db, "employee")
+
+    assert client.patch(f"/users/{empleado.id}", json={"department_id": 9999}, headers=h).status_code == 400
+    assert client.patch(f"/users/{empleado.id}", json={"department_id": baja["id"]}, headers=h).status_code == 400
+    r = client.patch(f"/users/{empleado.id}", json={"department_id": ventas["id"]}, headers=h)
+    assert r.json()["department_id"] == ventas["id"]
+    # omitirlo no lo toca; null explícito lo quita
+    assert client.patch(f"/users/{empleado.id}", json={"name": "Otro"}, headers=h).json()["department_id"] == ventas["id"]
+    assert client.patch(f"/users/{empleado.id}", json={"department_id": None}, headers=h).json()["department_id"] is None
+
+    acciones = [(e["action"], e["new_value"]) for e in client.get("/audit/", params={"kind": "users"}, headers=h).json()["items"]
+                if e["action"] == "department_id"]
+    assert acciones == [("department_id", "None"), ("department_id", str(ventas["id"]))]
+
+
+def test_articulo_conserva_categoria_desactivada_pero_no_cambia_a_una(client, db):
+    tecnico = create_user(db, "technician")
+    h = auth_headers(tecnico)
+    art = client.post("/library/", json={"title": "t", "problem": "p", "solution": "s", "category": "email"}, headers=h).json()
+    db.get(models.Category, "email").is_active = False
+    db.commit()
+    assert client.patch(f"/library/{art['id']}", json={"title": "t2", "category": "email"}, headers=h).status_code == 200
+    assert client.patch(f"/library/{art['id']}", json={"category": "nada"}, headers=h).status_code == 400

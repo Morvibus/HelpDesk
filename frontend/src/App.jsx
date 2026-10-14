@@ -7,9 +7,14 @@ import Dashboard from './pages/Dashboard'
 import TicketDetail from './pages/TicketDetail'
 import Library from './pages/Library'
 import AdminPanel from './pages/AdminPanel'
+import Assets, { AssetDetail } from './pages/Assets'
+import Reports from './pages/Reports'
+import Access, { AccessDetail } from './pages/Access'
 
-const ProtectedRoute = ({ children }) => {
+// adminOnly / staffOnly (técnicos + admins): los demás roles vuelven al panel
+const ProtectedRoute = ({ children, adminOnly = false, staffOnly = false }) => {
   const token = useAuthStore(state => state.token)
+  const role = useAuthStore(state => state.role)
   const logout = useAuthStore(state => state.logout)
 
   // Token vencido → limpiar la sesión (el interceptor 401 cubre las llamadas)
@@ -18,21 +23,8 @@ const ProtectedRoute = ({ children }) => {
   }, [token, logout])
 
   if (!token || isTokenExpired(token)) return <Navigate to="/login" replace />
-  return children
-}
-
-// Solo administradores: los demás roles vuelven al panel
-const AdminRoute = ({ children }) => {
-  const token = useAuthStore(state => state.token)
-  const role = useAuthStore(state => state.role)
-  const logout = useAuthStore(state => state.logout)
-
-  useEffect(() => {
-    if (token && isTokenExpired(token)) logout()
-  }, [token, logout])
-
-  if (!token || isTokenExpired(token)) return <Navigate to="/login" replace />
-  if (role !== 'admin') return <Navigate to="/" replace />
+  if (adminOnly && role !== 'admin') return <Navigate to="/" replace />
+  if (staffOnly && role === 'employee') return <Navigate to="/" replace />
   return children
 }
 
@@ -88,10 +80,35 @@ export default function App() {
               <Library />
             </ProtectedRoute>
           } />
+          <Route path="/activos" element={
+            <ProtectedRoute staffOnly>
+              <Assets />
+            </ProtectedRoute>
+          } />
+          <Route path="/activos/:id" element={
+            <ProtectedRoute staffOnly>
+              <AssetDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/accesos" element={
+            <ProtectedRoute>
+              <Access />
+            </ProtectedRoute>
+          } />
+          <Route path="/accesos/:id" element={
+            <ProtectedRoute>
+              <AccessDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/reportes" element={
+            <ProtectedRoute staffOnly>
+              <Reports />
+            </ProtectedRoute>
+          } />
           <Route path="/admin" element={
-            <AdminRoute>
+            <ProtectedRoute adminOnly>
               <AdminPanel />
-            </AdminRoute>
+            </ProtectedRoute>
           } />
         </Routes>
       </BrowserRouter>
