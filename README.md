@@ -36,7 +36,10 @@ ticket) y todos los roles pueden consultarlas y buscarlas.
 git clone https://github.com/Morvibus/HelpDesk.git
 cd HelpDesk
 
-# 2. Levantar los servicios (Postgres + API + Frontend)
+# 2. Configuración: crear backend/.env a partir del ejemplo y poner una SECRET_KEY propia
+cp backend/.env.example backend/.env
+
+# 3. Levantar los servicios (Postgres + API + Frontend)
 docker compose up -d --build
 ```
 
@@ -129,9 +132,7 @@ Los archivos `.dump` contienen datos personales: guárdalos fuera del repositori
 HelpDesk/
 ├── docker-compose.yml      # Postgres + backend (:8000) + frontend (:5173)
 ├── backend/                # FastAPI — main.py (app), routes_*.py + realtime.py (rutas), deps.py, models.py, schemas.py
-├── frontend/               # React — src/pages, src/components, src/store (zustand)
-├── AGENTS.md               # Instrucciones para agentes de código
-└── MEMORY.md               # Estado y decisiones del proyecto entre sesiones
+└── frontend/               # React — src/pages, src/components, src/store (zustand)
 ```
 
 ## 📜 Licencia
