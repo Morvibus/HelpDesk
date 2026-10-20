@@ -63,7 +63,7 @@ const ColumnEmptyState = ({ icon: Icon, title, message }) => (
 // --- Pestaña Buscar (RF-10): filtros en el servidor; cada rol solo ve lo suyo, como el tablero ---
 const STATUS_LABELS = { created: 'Nuevo', assigned: 'Asignado', in_process: 'En Proceso', pending: 'Pendiente', solved: 'Solucionado', closed: 'Cerrado' }
 const TYPE_LABELS = { incident: 'Incidente', service_request: 'Solicitud', maintenance: 'Mantenimiento', inquiry: 'Consulta' }
-const FILTROS_VACIOS = { q: '', status: '', ticket_type: '', category: '', department_id: '', created_by: '', date_from: '', date_to: '' }
+const FILTROS_VACIOS = { q: '', status: '', ticket_type: '', category: '', department_id: '', created_by: '', asset_id: '', date_from: '', date_to: '' }
 const selectClass = "px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light outline-none"
 // Timestamps naive del backend = UTC
 const fechaCorta = (ts) => (ts ? new Date(`${ts}Z`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
@@ -74,14 +74,16 @@ const SearchTab = ({ isTech }) => {
     const [items, setItems] = useState([])
     const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
-    const [catalogos, setCatalogos] = useState({ categorias: [], departamentos: [], personas: [] })
+    const [catalogos, setCatalogos] = useState({ categorias: [], departamentos: [], personas: [], activos: [] })
     const set = (campo) => (e) => setFiltros({ ...filtros, [campo]: e.target.value })
     // Solo los filtros con valor viajan al API
     const params = (offset) => ({ ...Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== '')), limit: 50, offset })
 
     useEffect(() => {
-        const pedidos = [fetchCatalog('/categories/'), isTech ? fetchCatalog('/departments/') : [], isTech ? fetchCatalog('/users/directory/') : []]
-        Promise.all(pedidos).then(([categorias, departamentos, personas]) => setCatalogos({ categorias, departamentos, personas })).catch(() => {})
+        // shortcut: los primeros 200 activos por código; con más inventario, cambiar a búsqueda por texto
+        const pedirActivos = isTech ? api.get('/assets/', { params: { limit: 200 } }).then(r => r.data.items) : []
+        const pedidos = [fetchCatalog('/categories/'), isTech ? fetchCatalog('/departments/') : [], isTech ? fetchCatalog('/users/directory/') : [], pedirActivos]
+        Promise.all(pedidos).then(([categorias, departamentos, personas, activos]) => setCatalogos({ categorias, departamentos, personas, activos })).catch(() => {})
     }, [isTech])
 
     // oxlint-disable react/exhaustive-effect-dependencies -- params se arma con filtros
@@ -132,6 +134,10 @@ const SearchTab = ({ isTech }) => {
                         <select value={filtros.created_by} onChange={set('created_by')} aria-label="Solicitante" className={selectClass}>
                             <option value="">Todos los solicitantes</option>
                             {catalogos.personas.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <select value={filtros.asset_id} onChange={set('asset_id')} aria-label="Activo" className={selectClass}>
+                            <option value="">Todos los activos</option>
+                            {catalogos.activos.map(a => <option key={a.id} value={a.id}>{a.brand ? `${a.tag} · ${a.brand}` : a.tag}</option>)}
                         </select>
                     </>
                 )}

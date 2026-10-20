@@ -209,3 +209,17 @@ def test_consulta_filtra_y_ordena(client, db):
     # La ficha del activo incluye sus mantenimientos (historial RF-07 / CA-05)
     ficha = client.get(f"/assets/{imp['id']}", headers=h).json()
     assert {m["id"] for m in ficha["maintenances"]} == {cerca["id"], cancelado["id"]}
+
+
+def test_dar_de_baja_cancela_mantenimientos_programados(client, db):
+    h = auth_headers(create_user(db, "technician"))
+    asset = _alta(client, h).json()
+    programado = _programar(client, h, asset["id"]).json()
+    hecho = _programar(client, h, asset["id"]).json()
+    client.patch(f"/maintenances/{hecho['id']}", json={"status": "done", "actions": "ok"}, headers=h)
+
+    assert client.patch(f"/assets/{asset['id']}", json={"status": "retired"}, headers=h).status_code == 200
+    ficha = client.get(f"/assets/{asset['id']}", headers=h).json()
+    estados = {m["id"]: m["status"] for m in ficha["maintenances"]}
+    assert estados == {programado["id"]: "cancelled", hecho["id"]: "done"}  # el realizado no se toca
+    assert (ficha["events"][0]["action"], ficha["events"][0]["new_value"]) == ("maintenances_cancelled", "1")

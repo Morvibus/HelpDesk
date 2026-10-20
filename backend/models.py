@@ -367,3 +367,19 @@ class AccessEvent(Base):
     comment = Column(Text, nullable=True)
     changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+# --- CENTRO DE NOTIFICACIONES ---
+class Notification(Base):
+    """Aviso guardado para su destinatario (esté conectado o no). Solo se guardan los que llevan
+    sonido; los refrescos de fondo no. Se borran solos a los 30 días (ver realtime.py)."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=True)
+    icon = Column(String, nullable=True)
+    sound = Column(String, nullable=True)  # work | message
+    link = Column(String, nullable=True)   # ruta del frontend: /ticket/5, /accesos/3
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)

@@ -154,6 +154,10 @@ export default function TicketDetail() {
 
     useEffect(() => {
         removeUnreadTicket(Number(id))
+        // Abrir el ticket = sus avisos del centro de notificaciones quedan leídos
+        api.post('/notifications/read-all', null, { params: { link: `/ticket/${id}` } })
+            .then(() => useUIStore.getState().bumpNotifications())
+            .catch(() => {})
     }, [id, removeUnreadTicket])
 
     // Nombres de categoría y departamento (catálogos cacheados por api.js)

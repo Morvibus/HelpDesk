@@ -65,7 +65,9 @@ def create_ticket(
         "Nuevo Ticket Creado",
         f"#{new_ticket.id}: {new_ticket.title}",
         "🆕",
-        "refresh" 
+        "refresh",
+        ticket_id=new_ticket.id,
+        sound="work",  # trabajo nuevo para I&T
     )
     
     return new_ticket
@@ -287,6 +289,12 @@ def update_ticket(
             db_ticket.id,
             current_user.id
         )
+        # Al nuevo responsable (si no se lo asignó él mismo): es trabajo nuevo para él
+        if db_ticket.assigned_to is not None and db_ticket.assigned_to != current_user.id:
+            background_tasks.add_task(
+                notifier.notify_user, db_ticket.assigned_to, f"Te asignaron el ticket #{db_ticket.id}",
+                db_ticket.title, "👤", "refresh", db_ticket.id, sound="work",
+            )
 
     if current_user.id != db_ticket.created_by:
         mensaje = "Tu ticket ha sido actualizado."
@@ -310,7 +318,8 @@ def update_ticket(
             mensaje,
             icono,
             "refresh",
-            db_ticket.id
+            db_ticket.id,
+            sound="message",
         )
 
     

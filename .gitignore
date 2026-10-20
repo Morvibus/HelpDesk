@@ -30,3 +30,16 @@ npm-debug.log*
 
 # Respaldos de la base (contienen datos personales)
 *.dump
+
+# carpetas
+temp/
+graphify-out/
+
+# ia
+CLAUDE.md
+AGENTS.md
+MEMORY.md
+
+# otros
+PRUEBAS.md
+necesidades.md

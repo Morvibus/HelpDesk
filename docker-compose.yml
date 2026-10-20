@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: helpdesk_password
       POSTGRES_DB: helpdesk_db
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432" # solo desde el propio equipo: la red entra únicamente por el 5173
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +32,7 @@ services:
     container_name: helpdesk_backend
     restart: always
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000" # el navegador llega al API por el proxy /api de Vite
     env_file:
       - ./backend/.env # aporta SECRET_KEY (y DATABASE_URL, que 'environment' sobrescribe)
     environment:

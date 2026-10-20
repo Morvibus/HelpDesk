@@ -153,10 +153,21 @@ def update_asset(
     if cambios.get("status") == models.AssetStatusEnum.retired and vigente is not None:
         raise HTTPException(status_code=400, detail="Registra la devolución antes de dar de baja el activo")
 
+    dar_de_baja = cambios.get("status") == models.AssetStatusEnum.retired != asset.status
     for campo in CAMPOS_AUDITADOS:
         if campo in cambios and cambios[campo] != getattr(asset, campo):
             _event(db, asset_id, current_user.id, campo, getattr(asset, campo), cambios[campo], data.comment)
             setattr(asset, campo, cambios[campo])
+
+    # Dado de baja: sus mantenimientos programados se cancelan solos (decisión del usuario),
+    # así no quedan "vencidos" fantasma en Reportes. Queda en la bitácora cuántos fueron.
+    if dar_de_baja:
+        M = models.Maintenance
+        cancelados = db.query(M).filter(M.asset_id == asset_id, M.status == models.MaintenanceStatusEnum.scheduled).update(
+            {M.status: models.MaintenanceStatusEnum.cancelled}, synchronize_session=False,
+        )
+        if cancelados:
+            _event(db, asset_id, current_user.id, "maintenances_cancelled", new=cancelados, comment="Cancelados al dar de baja el activo")
     db.commit()
     db.refresh(asset)
     return _out(asset, vigente)

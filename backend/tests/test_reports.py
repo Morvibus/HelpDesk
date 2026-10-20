@@ -58,6 +58,8 @@ def test_vencido_segun_sla_en_horas_habiles(db):
     t.created_at = datetime(2026, 10, 12, 14, 0)
     assert is_overdue(t, datetime(2026, 10, 12, 20, 0, tzinfo=timezone.utc)) is False
     assert is_overdue(t, datetime(2026, 10, 15, 20, 0, tzinfo=timezone.utc)) is True
+    t.status = models.StatusEnum.pending
+    assert is_overdue(t, datetime(2026, 10, 15, 20, 0, tzinfo=timezone.utc)) is False  # esperando: no vence
     t.status = models.StatusEnum.solved
     assert is_overdue(t, datetime(2026, 10, 15, 20, 0, tzinfo=timezone.utc)) is False  # cerrado no vence
 
@@ -93,5 +95,6 @@ def test_reportes_solo_it_y_cuentas_verificables(client, db):
     assert r["by_technician"] == [{"key": str(tecnico.id), "label": "Tec", "count": 1, "avg_business_hours": r["by_technician"][0]["avg_business_hours"]}]
     assert r["top_assets"] == [{"key": str(asset["id"]), "label": "PC-9", "count": 2, "avg_business_hours": None}]
     # Foto actual: independiente del período
-    assert (r["open_now"], r["pending_now"], r["overdue_now"]) == (2, 1, 1)
+    # c es Pendiente y viejo: cuenta como pendiente pero NO como vencido (Pendiente no vence)
+    assert (r["open_now"], r["pending_now"], r["overdue_now"]) == (2, 1, 0)
     assert (r["maintenances_overdue"], r["maintenances_upcoming"]) == (1, 1)

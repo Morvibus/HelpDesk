@@ -5,7 +5,7 @@ import Layout from '../components/Layout'
 import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'
 import { toast } from 'react-hot-toast'
-import { Users, UserPlus, Loader2, KeyRound, X, ShieldCheck, Pencil, LayoutGrid, TrendingUp, Clock, Inbox, Hourglass, History, Tags, CheckCircle2 } from 'lucide-react'
+import { Users, UserPlus, Loader2, KeyRound, X, ShieldCheck, Pencil, LayoutGrid, TrendingUp, Clock, Inbox, Hourglass, History, Tags, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 
 const LIMIT = 50
 
@@ -60,6 +60,25 @@ const PriorityBadge = ({ priority }) => (
         {PRIORITY_LABELS[priority] || priority}
     </span>
 )
+
+// Campo de contraseña con botón para mostrarla (mismo patrón que el login)
+const PasswordInput = ({ className, ...props }) => {
+    const [ver, setVer] = useState(false)
+    return (
+        <div className="relative">
+            <input {...props} type={ver ? 'text' : 'password'} className={`${className} pr-10`} />
+            <button
+                type="button"
+                onClick={() => setVer(v => !v)}
+                aria-label={ver ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                aria-pressed={ver}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-brand-primary dark:hover:text-brand-light transition-colors"
+            >
+                {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+        </div>
+    )
+}
 
 // --- Modales como componentes de módulo (no se redefinen por render) ---
 
@@ -139,9 +158,8 @@ const CreateUserModal = ({ open, onClose, onCreated, departamentos }) => {
 
                     <div>
                         <label htmlFor="user-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña</label>
-                        <input
+                        <PasswordInput
                             id="user-password"
-                            type="password"
                             required
                             minLength={6}
                             value={password}
@@ -252,9 +270,8 @@ const ResetPasswordModal = ({ user, onClose, onUpdated }) => {
                     {esPropio && (
                         <div>
                             <label htmlFor="reset-old-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña actual</label>
-                            <input
+                            <PasswordInput
                                 id="reset-old-password"
-                                type="password"
                                 required
                                 value={oldPassword}
                                 onChange={(e) => setOldPassword(e.target.value)}
@@ -265,9 +282,8 @@ const ResetPasswordModal = ({ user, onClose, onUpdated }) => {
 
                     <div>
                         <label htmlFor="reset-new-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nueva contraseña</label>
-                        <input
+                        <PasswordInput
                             id="reset-new-password"
-                            type="password"
                             required
                             minLength={6}
                             value={newPassword}

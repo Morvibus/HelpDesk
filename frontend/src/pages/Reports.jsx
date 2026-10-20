@@ -20,7 +20,7 @@ const PERIODOS = {
 }
 
 // CSV para Excel en español: separador ";" y BOM UTF-8 (si no, los acentos salen rotos)
-const descargarCsv = (nombre, columnas, filas) => {
+export const descargarCsv = (nombre, columnas, filas) => {
     const celda = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const csv = [columnas, ...filas].map(f => f.map(celda).join(';')).join('\r\n')
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))

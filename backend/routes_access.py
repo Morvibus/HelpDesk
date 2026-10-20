@@ -57,9 +57,9 @@ def _event(db, acceso, user, action, old=None, comment=None):
 def _avisar(background_tasks, acceso, user, titulo, mensaje):
     """El solicitante se entera de lo que hace I&T; I&T, de lo que hace el solicitante."""
     if user.id == acceso.requested_by:
-        background_tasks.add_task(notifier.notify_techs, titulo, mensaje, "🔑", "refresh", None, user.id)
+        background_tasks.add_task(notifier.notify_techs, titulo, mensaje, "🔑", "refresh", None, user.id, sound="message", link=f"/accesos/{acceso.id}")
     else:
-        background_tasks.add_task(notifier.notify_user, acceso.requested_by, titulo, mensaje, "🔑", "refresh", None, user.id)
+        background_tasks.add_task(notifier.notify_user, acceso.requested_by, titulo, mensaje, "🔑", "refresh", None, user.id, sound="message", link=f"/accesos/{acceso.id}")
 
 
 @router.get("/access-requests/", response_model=schemas.Page[schemas.AccessRequestResponse])
@@ -109,7 +109,7 @@ def create_access_request(
     db.commit()
     db.refresh(acceso)
     sistema = db.get(models.AccessSystem, data.system).name
-    background_tasks.add_task(notifier.notify_techs, "Nueva solicitud de acceso", f"{current_user.name} pide acceso a {sistema}", "🔑", "refresh", None, current_user.id)
+    background_tasks.add_task(notifier.notify_techs, "Nueva solicitud de acceso", f"{current_user.name} pide acceso a {sistema}", "🔑", "refresh", None, current_user.id, sound="work", link=f"/accesos/{acceso.id}")
     return _detail(db, acceso)
 
 

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, fetchCatalog } from '../api'
 import Layout from '../components/Layout'
+import { descargarCsv } from './Reports'
 import { toast } from 'react-hot-toast'
-import { ArrowLeft, Loader2, Monitor, Plus, Search, X, Pencil, UserCheck, Undo2, MessageSquarePlus, Wrench } from 'lucide-react'
+import { ArrowLeft, Loader2, Monitor, Plus, Search, X, Pencil, UserCheck, Undo2, MessageSquarePlus, Wrench, Download } from 'lucide-react'
 
 // Activos (RF-06/07/08): listado (/activos) y ficha con historial (/activos/:id). Solo I&T.
 
@@ -20,6 +21,7 @@ const TICKET_STATUS = { created: 'Nuevo', assigned: 'Asignado', in_process: 'En 
 const EVENT_LABELS = {
     created: 'Alta', status: 'Estado', tag: 'Código', asset_type: 'Tipo', brand: 'Marca', model: 'Modelo',
     serial: 'Serie', notes: 'Notas', note: 'Observación', returned: 'Devolución',
+    maintenances_cancelled: 'Mantenimientos cancelados',
 }
 
 const inputClass = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-primary dark:focus:ring-brand-light outline-none transition-shadow"
@@ -662,6 +664,18 @@ export function AssetDetail() {
     const card = "bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-6"
     const vigente = asset.current_assignment
 
+    // Historial del activo (RF-12): asignaciones, bitácora, tickets y mantenimientos en una sola tabla,
+    // del más reciente al más antiguo (los timestamps ISO del backend se ordenan como texto)
+    const exportarHistorial = () => {
+        const filas = [
+            ...asset.assignments.map(a => [a.assigned_at, 'Asignación', `${destino(a, lk)}${a.returned_at ? ` (devuelto ${fecha(a.returned_at)})` : ' (vigente)'}`, lk.persona(a.assigned_by), a.notes]),
+            ...asset.events.map(e => [e.timestamp, EVENT_LABELS[e.action] || e.action, e.old_value || e.new_value ? `${e.old_value ?? ''} → ${e.new_value ?? ''}` : '', lk.persona(e.changed_by), e.comment]),
+            ...asset.tickets.map(t => [t.created_at, 'Ticket', `#${t.id} ${t.title} (${TICKET_STATUS[t.status] || t.status})`, '', '']),
+            ...asset.maintenances.map(m => [m.created_at, `Mantenimiento ${KIND_LABELS[m.kind].toLowerCase()}`, `${M_STATUS_LABELS[m.status]} · programado ${fechaCorta(m.scheduled_for)}`, lk.persona(m.responsible_id) || '', [m.findings, m.actions].filter(Boolean).join(' / ')]),
+        ].sort((x, y) => (x[0] < y[0] ? 1 : -1)).map(([ts, ...resto]) => [fecha(ts), ...resto])
+        descargarCsv(`historial_${asset.tag}`, ['Fecha', 'Tipo', 'Detalle', 'Quién', 'Observaciones'], filas)
+    }
+
     return (
         <Layout>
             {modal === 'edit' && <AssetFormModal asset={asset} tipos={lk.tipos} onClose={() => setModal(null)} onSaved={() => { setModal(null); cargar() }} />}
@@ -691,6 +705,7 @@ export function AssetDetail() {
                             ))}
                         </dl>
                         <button onClick={() => setModal('edit')} className={`${btnSecondary} w-full mt-4`}><Pencil className="w-4 h-4 mr-2" /> Editar datos</button>
+                        <button onClick={exportarHistorial} className={`${btnSecondary} w-full mt-2`}><Download className="w-4 h-4 mr-2" /> Historial completo (CSV)</button>
                     </div>
 
                     <div className={card}>
@@ -806,7 +821,9 @@ export function AssetDetail() {
                                     <li key={e.id} className="text-sm">
                                         <p className="text-gray-900 dark:text-white">
                                             {EVENT_LABELS[e.action] || e.action}
-                                            {e.action !== 'note' && e.action !== 'returned' && e.action !== 'created' && `: ${valor(e.old_value)} → ${valor(e.new_value)}`}
+                                            {e.action === 'maintenances_cancelled'
+                                                ? `: ${e.new_value}`
+                                                : !['note', 'returned', 'created'].includes(e.action) && `: ${valor(e.old_value)} → ${valor(e.new_value)}`}
                                         </p>
                                         {e.comment && <p className="text-xs italic text-gray-600 dark:text-gray-400">“{e.comment}”</p>}
                                         <p className="text-xs text-gray-500">{lk.persona(e.changed_by)} · {fecha(e.timestamp)}</p>

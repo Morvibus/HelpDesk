@@ -229,6 +229,13 @@ export function AccessDetail() {
     const [comentario, setComentario] = useState('')  // hilo de conversación
     const [busy, setBusy] = useState(false)
 
+    // Abrir la solicitud = sus avisos del centro de notificaciones quedan leídos
+    useEffect(() => {
+        api.post('/notifications/read-all', null, { params: { link: `/accesos/${id}` } })
+            .then(() => useUIStore.getState().bumpNotifications())
+            .catch(() => {})
+    }, [id])
+
     // oxlint-disable react/exhaustive-effect-dependencies -- recarga al cambiar de solicitud o al llegar un aviso
     useEffect(() => {
         const controller = new AbortController()

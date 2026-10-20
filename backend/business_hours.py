@@ -57,7 +57,9 @@ OPEN_STATUSES = ("created", "assigned", "in_process", "pending")
 def is_overdue(ticket, now):
     status = getattr(ticket.status, "value", ticket.status)
     priority = getattr(ticket.priority, "value", ticket.priority)
-    if status not in OPEN_STATUSES:
+    # Pendiente = esperando al usuario o a un tercero: I&T no puede avanzar, no vence (decisión del usuario).
+    # El semáforo de antigüedad sigue mostrando las horas reales.
+    if status not in OPEN_STATUSES or status == "pending":
         return False
     return business_hours_between(ticket.created_at, now) > SLA_HOURS.get(priority, 48)
 

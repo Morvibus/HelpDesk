@@ -24,6 +24,13 @@ api.interceptors.response.use(
             useAuthStore.getState().logout()
             window.location.replace('/login')
         }
+        // 422 de validación: detail llega como lista de objetos y React no puede pintarla; se pasa a texto.
+        const data = error.response?.data
+        if (Array.isArray(data?.detail)) {
+            data.detail = data.detail.map(e => e.loc?.includes('email')
+                ? 'Correo no válido (dominios como .local o .test no se aceptan)'
+                : `${e.loc?.at(-1) ?? 'dato'}: ${e.msg}`).join('. ')
+        }
         return Promise.reject(error)
     }
 )

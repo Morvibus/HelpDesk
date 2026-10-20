@@ -441,3 +441,25 @@ def test_chat_con_adjunto_valido_y_rechaza_rutas_ajenas(client, db):
         assert [(m["content"], m["image_url"]) for m in r["items"]] == [("m.pdf", subida)]
     finally:
         os.remove(os.path.join(routes_tickets.UPLOAD_DIR, subida.rsplit("/", 1)[-1]))
+
+
+def test_avisos_llevan_su_sonido(client, db):
+    """Chat = "message"; ticket asignado a alguien = "work" para él (el aviso general va sin sonido)."""
+    from conftest import auth_headers
+
+    empleado = create_user(db, "employee")
+    tecnico = create_user(db, "technician")
+    admin = create_user(db, "admin")
+    ticket = create_ticket(db, empleado.id)
+
+    with client.websocket_connect("/ws/notifications", subprotocols=["auth", token_for(tecnico)]) as avisos:
+        client.patch(f"/tickets/{ticket.id}", json={"assigned_to": tecnico.id}, headers=auth_headers(admin))
+        general, personal = avisos.receive_json(), avisos.receive_json()
+        assert general["sound"] is None  # "Ticket asignado" para todo I&T: solo refresca
+        assert (personal["sound"], personal["ticket_id"]) == ("work", ticket.id)
+        assert personal["title"] == f"Te asignaron el ticket #{ticket.id}"
+
+        with client.websocket_connect(f"/ws/tickets/{ticket.id}/chat", subprotocols=["auth", token_for(empleado)]) as chat:
+            chat.send_json({"content": "hola"})
+            chat.receive_json()
+            assert avisos.receive_json()["sound"] == "message"

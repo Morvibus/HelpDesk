@@ -383,3 +383,20 @@ class ReportSummary(BaseModel):
     maintenances_overdue: int
     maintenances_upcoming: int  # próximos 30 días
     access_enabled_by_system: list[ReportBucket]
+
+# --- CENTRO DE NOTIFICACIONES ---
+class NotificationResponse(BaseModel):
+    id: int
+    title: str
+    message: Optional[str] = None
+    icon: Optional[str] = None
+    sound: Optional[str] = None
+    link: Optional[str] = None
+    read_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class NotificationPage(Page[NotificationResponse]):
+    unread: int  # no leídas en total (para el contador de la campana)

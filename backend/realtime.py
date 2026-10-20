@@ -1,9 +1,12 @@
-"""Tiempo real: chat por ticket y notificaciones globales (WebSockets + gestores de conexiones)."""
+"""Tiempo real: chat por ticket, avisos en vivo (WebSockets) y centro de notificaciones (REST)."""
 import asyncio
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from database import SessionLocal
-from deps import _user_from_token, _can_see_ticket, _valid_attachment
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
+from database import SessionLocal, get_db
+from deps import get_current_user, _user_from_token, _can_see_ticket, _valid_attachment
 import models
+import schemas
 
 router = APIRouter()
 
@@ -170,6 +173,7 @@ async def chat_websocket(websocket: WebSocket, ticket_id: int):
                 ticket_id,
                 exclude_user_id=user_id,
                 is_private=is_private,
+                sound="message",
             )
             
     except WebSocketDisconnect:
@@ -203,23 +207,28 @@ class NotificationManager:
             # Socket muerto: se da de baja sin romper el resto de envíos
             self.disconnect(conn["ws"], user_id)
 
-    async def notify_user(self, user_id: int, title: str, message: str, icon: str = "🔔", msg_type: str = "toast", ticket_id: int = None, exclude_user_id: int = None):
-        # Verificamos que el destinatario no sea la misma persona que originó el mensaje
-        if user_id == exclude_user_id:
-            return
-        payload = {"type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id}
-        for conn in list(self.active_connections.get(user_id, [])):
-            await self._send_safe(user_id, conn, payload)
-
-    async def notify_techs(self, title: str, message: str, icon: str = "🔔", msg_type: str = "toast", ticket_id: int = None, exclude_user_id: int = None):
-        payload = {"type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id}
+    async def _repartir(self, recibe, payload: dict, exclude_user_id: int = None):
+        """Envía en vivo a las conexiones que cumplen `recibe(uid, rol)` y, si el aviso lleva sonido
+        (no es un simple refresco), lo guarda para TODOS los usuarios activos que la cumplen, estén
+        conectados o no: así no se pierde lo que pasó mientras alguien no tenía la app abierta.
+        La misma regla decide ambas cosas; el emisor nunca se auto-notifica."""
         for uid, conns in list(self.active_connections.items()):
-            # Filtramos para que no le llegue a los empleados NI al usuario que originó el mensaje
             if uid == exclude_user_id:
                 continue
             for conn in list(conns):
-                if conn["role"] != "employee":
+                if recibe(uid, conn["role"]):
                     await self._send_safe(uid, conn, payload)
+        if payload.get("sound"):
+            await asyncio.to_thread(_guardar_avisos, recibe, payload, exclude_user_id)
+
+    async def notify_user(self, user_id: int, title: str, message: str, icon: str = "🔔", msg_type: str = "toast", ticket_id: int = None, exclude_user_id: int = None, sound: str = None, link: str = None):
+        payload = _payload(msg_type, title, message, icon, ticket_id, sound, link)
+        await self._repartir(lambda uid, rol: uid == user_id, payload, exclude_user_id)
+
+    async def notify_techs(self, title: str, message: str, icon: str = "🔔", msg_type: str = "toast", ticket_id: int = None, exclude_user_id: int = None, sound: str = None, link: str = None):
+        # Nunca a empleados
+        payload = _payload(msg_type, title, message, icon, ticket_id, sound, link)
+        await self._repartir(lambda uid, rol: rol != "employee", payload, exclude_user_id)
 
     async def notify_ticket_message(
         self,
@@ -232,6 +241,7 @@ class NotificationManager:
         ticket_id: int = None,
         exclude_user_id: int = None,
         is_private: bool = False,
+        sound: str = None,
     ):
         """Reparte el aviso de un mensaje de chat según su visibilidad.
 
@@ -241,28 +251,94 @@ class NotificationManager:
         - Mensaje público: creador + asignado + (técnicos si no hay asignado) + admins.
         El emisor nunca se auto-notifica.
         """
-        payload = {"type": msg_type, "title": title, "message": message, "icon": icon, "ticket_id": ticket_id}
-        for uid, conns in list(self.active_connections.items()):
-            if uid == exclude_user_id:
-                continue
-            for conn in list(conns):
-                role = conn["role"]
-                if is_private:
-                    # La nota privada nunca debe llegar a un empleado
-                    if role in ("technician", "admin"):
-                        await self._send_safe(uid, conn, payload)
-                    continue
-                if uid == created_by:
-                    await self._send_safe(uid, conn, payload)
-                elif assigned_to is not None and uid == assigned_to:
-                    await self._send_safe(uid, conn, payload)
-                elif assigned_to is None and role in ("technician", "admin"):
-                    await self._send_safe(uid, conn, payload)
-                elif role == "admin":
-                    await self._send_safe(uid, conn, payload)
+        def recibe(uid, role):
+            if is_private:
+                return role in ("technician", "admin")  # la nota privada nunca llega a un empleado
+            return (
+                uid == created_by
+                or (assigned_to is not None and uid == assigned_to)
+                or (assigned_to is None and role in ("technician", "admin"))
+                or role == "admin"
+            )
+
+        payload = _payload(msg_type, title, message, icon, ticket_id, sound, None)
+        await self._repartir(recibe, payload, exclude_user_id)
+
+
+# Retención del centro de notificaciones (decisión del usuario): lo más viejo se borra solo
+RETENCION_AVISOS = timedelta(days=30)
+
+
+def _payload(msg_type, title, message, icon, ticket_id, sound, link):
+    # link: a dónde lleva el aviso al hacer clic (por defecto, el ticket)
+    link = link or (f"/ticket/{ticket_id}" if ticket_id else None)
+    return {"type": msg_type, "title": title, "message": message, "icon": icon,
+            "ticket_id": ticket_id, "sound": sound, "link": link}
+
+
+def _guardar_avisos(recibe, payload, exclude_user_id):
+    """Guarda el aviso para cada usuario activo que cumple la regla (sesión corta, como el resto de WS)."""
+    with SessionLocal() as db:
+        usuarios = db.query(models.User.id, models.User.role).filter(models.User.is_active.is_(True)).all()
+        destinatarios = [uid for uid, rol in usuarios if uid != exclude_user_id and recibe(uid, rol.value)]
+        db.add_all([
+            models.Notification(user_id=uid, title=payload["title"], message=payload["message"], icon=payload["icon"],
+                                sound=payload["sound"], link=payload["link"])
+            for uid in destinatarios
+        ])
+        limite = datetime.now(timezone.utc) - RETENCION_AVISOS
+        db.query(models.Notification).filter(models.Notification.created_at < limite).delete(synchronize_session=False)
+        db.commit()
 
 
 notifier = NotificationManager()
+
+
+# --- CENTRO DE NOTIFICACIONES (REST): cada usuario solo ve y marca los suyos ---
+
+@router.get("/notifications/", response_model=schemas.NotificationPage)
+def list_notifications(
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    N = models.Notification
+    query = db.query(N).filter(N.user_id == current_user.id)
+    return {
+        "items": query.order_by(N.created_at.desc(), N.id.desc()).offset(offset).limit(limit).all(),
+        "total": query.count(),
+        "unread": query.filter(N.read_at.is_(None)).count(),
+    }
+
+
+@router.post("/notifications/{notification_id}/read", response_model=schemas.NotificationResponse)
+def read_notification(notification_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    aviso = db.get(models.Notification, notification_id)
+    if aviso is None or aviso.user_id != current_user.id:  # el de otro = no existe (no se revela)
+        raise HTTPException(status_code=404, detail="Notificación no encontrada")
+    if aviso.read_at is None:
+        aviso.read_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(aviso)
+    return aviso
+
+
+@router.post("/notifications/read-all")
+def read_all_notifications(
+    link: str = Query(None),  # solo los de esa página (abrir un ticket marca sus avisos como leídos)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    N = models.Notification
+    query = db.query(N).filter(N.user_id == current_user.id, N.read_at.is_(None))
+    if link is not None:
+        query = query.filter(N.link == link)
+    marcadas = query.update(
+        {N.read_at: datetime.now(timezone.utc)}, synchronize_session=False,
+    )
+    db.commit()
+    return {"marked": marcadas}
 
 # --- ENDPOINT WEBSOCKET DE ALERTAS ---
 @router.websocket("/ws/notifications")
